@@ -266,10 +266,11 @@ input,select,textarea{font-size:16px !important}
 <!-- 記録入力 Modal -->
 <div class="modal-bg" id="inputModalBg" onclick="closeModal('inputModalBg',event)">
   <div class="modal-inner">
-    <div class="modal-title" id="modalTitle">💪 記録</div>
+    <div class="modal-title" id="modalTitle">💪 記録を修正</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">タップでセット追加、ここで手動修正できます</div>
     <div class="field-row">
-      <div class="field"><label>回数</label><input type="number" id="inputReps" min="1" inputmode="numeric"></div>
-      <div class="field"><label>セット数</label><input type="number" id="inputSets" min="1" inputmode="numeric"></div>
+      <div class="field"><label>回数（1セットあたり）</label><input type="number" id="inputReps" min="1" inputmode="numeric"></div>
+      <div class="field"><label>セット数</label><input type="number" id="inputSets" min="0" inputmode="numeric"></div>
     </div>
     <div class="field"><label>メモ（任意）</label><input type="text" id="inputNote" placeholder="調子よかった！"></div>
     <div class="modal-btns">
@@ -493,15 +494,27 @@ function renderHome() {
   const grid = document.getElementById('menuGrid');
   grid.innerHTML = '';
   S.menus.forEach(m => {
-    const done = !!S.todayDone[m.id];
     const rec  = S.todayDone[m.id];
+    const curSets = rec ? rec.sets : 0;
+    const done = curSets >= m.sets;
     grid.innerHTML += `
-      <div class="menu-card${done?' done':''}" style="--card-color:${m.color}" onclick="tapMenu(${m.id})">
+      <div class="menu-card${done?' done':''}" style="--card-color:${m.color}"
+        onclick="quickTap(${m.id})"
+        oncontextmenu="openEdit(${m.id});return false;"
+        onpointerdown="startLongPress(${m.id})"
+        onpointerup="cancelLongPress()"
+        onpointerleave="cancelLongPress()">
         <div class="menu-card-icon">${m.icon}</div>
         <div class="menu-card-name">${m.name}</div>
-        <div class="menu-card-target">目標: ${m.reps}回×${m.sets}セット</div>
+        <div class="menu-card-sets" style="margin-top:6px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+          ${Array.from({length: m.sets}, (_, i) =>
+            `<span style="width:10px;height:10px;border-radius:50%;background:${i < curSets ? m.color : 'var(--bg4)'};border:1px solid ${m.color};display:inline-block"></span>`
+          ).join('')}
+          <span style="font-size:11px;color:${curSets>0?m.color:'var(--text3)'};margin-left:2px">${curSets}/${m.sets}セット</span>
+        </div>
         ${done?`<div class="done-stamp">✓ DONE</div>`:''}
         <div class="menu-card-check" style="background:${m.color}">✓</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">長押しで編集</div>
       </div>`;
   });
   renderTodayProgress();
@@ -553,12 +566,56 @@ async function deleteToday(id) {
 }
 
 // ── 記録入力 ──────────────────────────────────────────────
-function tapMenu(id) {
+let longPressTimer = null;
+
+function startLongPress(id) {
+  longPressTimer = setTimeout(() => { openEdit(id); }, 600);
+}
+function cancelLongPress() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+}
+
+function quickTap(id) {
+  cancelLongPress();
+  const m = S.menus.find(x => x.id === id); if (!m) return;
+  const tk = todayKey();
+  const cur = S.todayDone[id];
+  const curSets = cur ? cur.sets : 0;
+  const newSets = curSets + 1;
+
+  S.todayDone[id] = {menuId: id, reps: m.reps, sets: newSets, note: cur?.note||'', xp: m.xp};
+  if (!S.records[tk]) S.records[tk] = [];
+  const idx = S.records[tk].findIndex(r => r.menuId == id);
+  if (idx >= 0) S.records[tk][idx] = {...S.todayDone[id]};
+  else S.records[tk].push({...S.todayDone[id]});
+
+  // XP再集計
+  const pastXp = Object.entries(S.records)
+    .filter(([k]) => k !== tk)
+    .flatMap(([, recs]) => recs)
+    .reduce((a, r) => { const mn=S.menus.find(x=>x.id==r.menuId); return a+(mn?mn.xp:0); }, 0);
+  const todayXp = Object.keys(S.todayDone).reduce((a, mid) => {
+    const mn = S.menus.find(x => x.id == mid);
+    return a + (mn ? mn.xp : 0);
+  }, 0);
+  const wasLv = S.level;
+  S.totalXp = pastXp + todayXp;
+  recalcLevel();
+  saveLocal();
+  renderHome();
+  updateHeader();
+  showXpPopup(m.xp);
+  if (S.level > wasLv) setTimeout(() => showLevelUp(S.level), 800);
+  setSyncState('ing');
+  pushRecord(tk, id, m.reps, newSets, cur?.note||'', m.xp);
+}
+
+function openEdit(id) {
   const m = S.menus.find(x => x.id === id); if (!m) return;
   S.activeMenuId = id;
   document.getElementById('modalTitle').innerHTML = `${m.icon} ${m.name}`;
   document.getElementById('inputReps').value = S.todayDone[id]?.reps ?? m.reps;
-  document.getElementById('inputSets').value = S.todayDone[id]?.sets ?? m.sets;
+  document.getElementById('inputSets').value = S.todayDone[id]?.sets ?? 0;
   document.getElementById('inputNote').value = S.todayDone[id]?.note ?? '';
   document.getElementById('inputModalBg').classList.add('open');
 }
