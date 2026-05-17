@@ -77,6 +77,7 @@ body{display:flex;flex-direction:column;max-width:430px;margin:0 auto}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .field label{font-size:11px;color:var(--text2);display:block;margin-bottom:4px}
 .field input,.field select{width:100%;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-size:16px;font-family:'Noto Sans JP',sans-serif}
+input,select,textarea{font-size:16px !important}
 .field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
 .modal-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
 .btn-cancel{background:var(--bg4);border:1px solid var(--border2);border-radius:10px;padding:12px;color:var(--text2);font-size:14px;cursor:pointer}
@@ -415,7 +416,10 @@ async function syncAll() {
     // 今日分をtodayDoneに反映
     const tk = todayKey();
     S.todayDone = {};
-    (S.records[tk]||[]).forEach(r => { S.todayDone[r.menuId] = r; });
+    (S.records[tk]||[]).forEach(r => {
+      const mid = Number(r.menuId);
+      S.todayDone[mid] = {...r, menuId: mid};
+    });
     saveLocal();
     setSyncState('ok');
     updateHeader();
@@ -514,8 +518,33 @@ function renderTodayProgress() {
       <span style="flex:1;font-size:13px">${m.name}</span>
       <span style="font-size:12px;color:var(--text2)">${r.reps}回×${r.sets}セット</span>
       <span style="font-size:11px;color:var(--xp);font-family:'Rajdhani',sans-serif">+${m.xp}XP</span>
+      <button onclick="deleteToday(${id})" style="background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.3);border-radius:6px;padding:4px 8px;color:var(--red);font-size:12px;cursor:pointer;flex-shrink:0">削除</button>
     </div>`;
   }).join('');
+}
+
+async function deleteToday(id) {
+  if (!confirm('この記録を削除しますか？')) return;
+  const m = S.menus.find(x => x.id == id);
+  if (m) S.totalXp = Math.max(0, S.totalXp - m.xp);
+  delete S.todayDone[id];
+  const tk = todayKey();
+  if (S.records[tk]) {
+    S.records[tk] = S.records[tk].filter(r => r.menuId != id);
+    if (!S.records[tk].length) delete S.records[tk];
+  }
+  recalcLevel();
+  saveLocal();
+  updateHeader();
+  renderHome();
+  if (S.gasUrl) {
+    setSyncState('ing');
+    try {
+      await gasPost({action:'deleteRecord', date: tk, menuId: id});
+      await gasPost({action:'saveState', state:{totalXp: S.totalXp, level: S.level}});
+      setSyncState('ok');
+    } catch(e) { setSyncState('err'); }
+  }
 }
 
 // ── 記録入力 ──────────────────────────────────────────────
@@ -749,7 +778,10 @@ loadLocal();
 updateHeader();
 renderHome();
 document.getElementById('gasUrl').value = S.gasUrl || '';
-if (S.gasUrl) setSyncState('ok');
+if (S.gasUrl) {
+  setSyncState('ing');
+  syncAll();  // 起動時に自動同期
+}
 </script>
 </body>
 </html>
