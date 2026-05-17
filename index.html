@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="筋トレ帳">
+<title>筋トレ帳</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+:root{
+  --bg:#0d0f14;--bg2:#13161e;--bg3:#1a1e28;--bg4:#222633;
+  --border:#2a2f40;--border2:#353c50;
+  --text:#e8eaf0;--text2:#8b90a0;--text3:#555c70;
+  --accent:#00e5a0;--accent2:#00b87a;--accent-glow:rgba(0,229,160,0.2);
+  --red:#ff4d6d;--amber:#ffa94d;--blue:#4dabf7;--purple:#cc5de8;
+  --xp:#ffd43b;
+  --safe-top:env(safe-area-inset-top,44px);
+  --safe-bottom:env(safe-area-inset-bottom,34px);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;overscroll-behavior:none}
+body{display:flex;flex-direction:column;max-width:430px;margin:0 auto}
+
+/* ── HEADER ── */
+.header{padding:calc(var(--safe-top) + 8px) 16px 12px;background:var(--bg);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.app-title{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--accent);letter-spacing:2px}
+.sync-btn{background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px}
+.sync-btn:active{opacity:0.7}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text3)}
+.sync-dot.ok{background:var(--accent)}
+.sync-dot.err{background:var(--red)}
+.sync-dot.ing{background:var(--amber);animation:blink 0.8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.xp-bar-wrap{display:flex;align-items:center;gap:8px}
+.level-badge{background:var(--accent);color:#000;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.xp-bar-outer{flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden}
+.xp-bar-inner{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px;transition:width 0.5s ease}
+.xp-text{font-size:11px;color:var(--xp);white-space:nowrap;font-family:'Rajdhani',sans-serif;font-weight:500}
+
+/* ── TABS ── */
+.tab-bar{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:72px;z-index:9}
+.tab-btn{flex:1;padding:10px 4px;text-align:center;font-size:11px;color:var(--text3);border:none;background:none;cursor:pointer;transition:color 0.2s;border-bottom:2px solid transparent}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-icon{font-size:18px;display:block;margin-bottom:2px}
+
+/* ── SCREENS ── */
+.screen{display:none;flex:1;overflow-y:auto;padding:16px;padding-bottom:calc(var(--safe-bottom) + 16px)}
+.screen.active{display:block}
+
+/* ── SETUP BANNER ── */
+.setup-banner{background:rgba(255,169,77,0.1);border:1px solid rgba(255,169,77,0.4);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;color:var(--amber);line-height:1.6}
+.setup-banner strong{display:block;margin-bottom:4px;font-size:14px}
+
+/* ── HOME ── */
+.section-label{font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;font-family:'Rajdhani',sans-serif;font-weight:500}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.menu-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
+.menu-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--card-color,var(--accent));opacity:0.4}
+.menu-card.done{border-color:var(--card-color,var(--accent));background:rgba(0,229,160,0.04)}
+.menu-card.done::before{opacity:1}
+.menu-card-icon{font-size:24px;margin-bottom:6px}
+.menu-card-name{font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px}
+.menu-card-target{font-size:11px;color:var(--text2)}
+.menu-card-check{position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:50%;background:var(--card-color,var(--accent));display:none;align-items:center;justify-content:center;font-size:11px}
+.menu-card.done .menu-card-check{display:flex}
+.done-stamp{position:absolute;bottom:8px;right:8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;color:var(--card-color,var(--accent));opacity:0.8;letter-spacing:1px}
+
+/* ── MODALS ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:100;align-items:flex-end;justify-content:center}
+.modal-bg.open{display:flex}
+.modal-inner{background:var(--bg2);border:1px solid var(--border2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:430px;padding-bottom:calc(var(--safe-bottom) + 20px)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.field label{font-size:11px;color:var(--text2);display:block;margin-bottom:4px}
+.field input,.field select{width:100%;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-size:16px;font-family:'Noto Sans JP',sans-serif}
+.field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
+.modal-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.btn-cancel{background:var(--bg4);border:1px solid var(--border2);border-radius:10px;padding:12px;color:var(--text2);font-size:14px;cursor:pointer}
+.btn-save{background:var(--accent);border:none;border-radius:10px;padding:12px;color:#000;font-size:14px;font-weight:700;cursor:pointer;font-family:'Noto Sans JP',sans-serif}
+.btn-save:disabled{opacity:0.5;cursor:not-allowed}
+
+/* ── XP POPUP ── */
+.xp-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);background:var(--bg2);border:2px solid var(--accent);border-radius:16px;padding:24px 32px;text-align:center;z-index:200;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1),opacity 0.3s}
+.xp-popup.show{transform:translate(-50%,-50%) scale(1)}
+.xp-popup.hide{transform:translate(-50%,-50%) scale(0);opacity:0}
+.xp-popup-amount{font-family:'Rajdhani',sans-serif;font-size:48px;font-weight:700;color:var(--xp)}
+.xp-popup-label{font-size:14px;color:var(--text2);margin-top:4px}
+
+/* ── LEVEL UP ── */
+.levelup-popup{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:300;align-items:center;justify-content:center;flex-direction:column}
+.levelup-popup.show{display:flex}
+.levelup-title{font-family:'Rajdhani',sans-serif;font-size:48px;font-weight:700;color:var(--accent);animation:pulse 0.5s ease infinite alternate;letter-spacing:4px}
+.levelup-num{font-family:'Rajdhani',sans-serif;font-size:96px;font-weight:700;color:var(--xp);line-height:1}
+.levelup-sub{color:var(--text2);font-size:14px;margin-top:12px}
+.levelup-btn{margin-top:24px;background:var(--accent);color:#000;border:none;border-radius:12px;padding:14px 40px;font-size:16px;font-weight:700;cursor:pointer;font-family:'Noto Sans JP',sans-serif}
+@keyframes pulse{from{opacity:0.7}to{opacity:1}}
+
+/* ── HISTORY ── */
+.calendar-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cal-nav{background:var(--bg4);border:none;color:var(--text2);font-size:18px;padding:4px 10px;border-radius:6px;cursor:pointer}
+.cal-month{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:var(--text)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-size:10px;color:var(--text3);text-align:center;padding-bottom:4px}
+.cal-day{aspect-ratio:1;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text3);position:relative}
+.cal-day.has-data{color:var(--text)}
+.cal-day.today{color:var(--accent);font-weight:700}
+.cal-day .dot{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent)}
+.cal-day.today .dot{background:var(--xp)}
+.hist-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}
+.hist-date{font-size:12px;color:var(--text2);margin-bottom:8px;font-family:'Rajdhani',sans-serif;font-weight:500}
+.hist-items{display:flex;flex-wrap:wrap;gap:6px}
+.hist-item{background:var(--bg4);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px}
+.hist-dot{width:6px;height:6px;border-radius:50%}
+
+/* ── STATS ── */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px}
+.stat-val{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--accent)}
+.stat-label{font-size:11px;color:var(--text3);margin-top:2px}
+.chart-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px}
+.chart-title{font-size:13px;font-weight:500;margin-bottom:12px;color:var(--text2)}
+.bar-chart{display:flex;align-items:flex-end;gap:4px;height:80px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.bar{width:100%;background:var(--accent);border-radius:3px 3px 0 0;transition:height 0.5s ease;min-height:2px}
+.bar-label{font-size:9px;color:var(--text3);white-space:nowrap}
+.heatmap-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-top:10px}
+.hm-cell{aspect-ratio:1;border-radius:2px;background:var(--bg4)}
+.hm-cell[data-v="1"]{background:rgba(0,229,160,0.3)}
+.hm-cell[data-v="2"]{background:rgba(0,229,160,0.55)}
+.hm-cell[data-v="3"]{background:rgba(0,229,160,0.8)}
+.hm-cell[data-v="4"]{background:rgba(0,229,160,1)}
+
+/* ── SETTINGS ── */
+.settings-section{margin-bottom:24px}
+.settings-title{font-size:13px;color:var(--text2);margin-bottom:10px;letter-spacing:1px;font-family:'Rajdhani',sans-serif;font-weight:500}
+.menu-edit-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.menu-edit-icon{font-size:24px}
+.menu-edit-info{flex:1}
+.menu-edit-name{font-size:14px;font-weight:500}
+.menu-edit-detail{font-size:12px;color:var(--text3);margin-top:2px}
+.menu-edit-btns{display:flex;gap:6px}
+.btn-edit{background:var(--bg4);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;color:var(--text2);font-size:12px;cursor:pointer}
+.btn-delete{background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);border-radius:6px;padding:6px 10px;color:var(--red);font-size:12px;cursor:pointer}
+.add-btn{width:100%;background:var(--bg2);border:1px dashed var(--border2);border-radius:10px;padding:14px;color:var(--text2);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.gas-input-wrap{display:flex;gap:8px;align-items:stretch}
+.gas-input{flex:1;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-size:12px;font-family:monospace}
+.gas-input:focus{outline:none;border-color:var(--accent)}
+.gas-save-btn{background:var(--accent);border:none;border-radius:8px;padding:10px 14px;color:#000;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
+.xp-settings{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px}
+.xp-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.xp-row:last-child{border-bottom:none}
+.xp-row-val{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:var(--xp)}
+
+/* ── MENU EDITOR MODAL ── */
+.emoji-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.emoji-opt{font-size:24px;padding:6px;border-radius:8px;cursor:pointer;background:var(--bg4);border:2px solid transparent}
+.emoji-opt.sel{border-color:var(--accent)}
+.color-picker{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.color-opt{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent}
+.color-opt.sel{border-color:var(--text)}
+
+/* ── LOADING ── */
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(13,15,20,0.85);z-index:400;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.loading-overlay.show{display:flex}
+.spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{color:var(--text2);font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <div class="app-title">💪 MUSCLE LOG</div>
+    <button class="sync-btn" onclick="syncAll()">
+      <span class="sync-dot" id="syncDot"></span>同期
+    </button>
+  </div>
+  <div class="xp-bar-wrap">
+    <div class="level-badge" id="levelBadge">Lv.1</div>
+    <div class="xp-bar-outer"><div class="xp-bar-inner" id="xpBar" style="width:0%"></div></div>
+    <div class="xp-text" id="xpText">0/100 XP</div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab('home')" id="tab-home"><span class="tab-icon">🏠</span>今日</button>
+  <button class="tab-btn" onclick="showTab('history')" id="tab-history"><span class="tab-icon">📅</span>履歴</button>
+  <button class="tab-btn" onclick="showTab('stats')" id="tab-stats"><span class="tab-icon">📊</span>統計</button>
+  <button class="tab-btn" onclick="showTab('settings')" id="tab-settings"><span class="tab-icon">⚙️</span>設定</button>
+</div>
+
+<!-- HOME -->
+<div class="screen active" id="screen-home">
+  <div id="setupBanner"></div>
+  <div class="section-label">今日のメニュー</div>
+  <div class="menu-grid" id="menuGrid"></div>
+  <div class="section-label">今日の進捗</div>
+  <div id="todayProgress" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:13px;color:var(--text2)">
+    メニューをタップして記録しよう！
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div class="screen" id="screen-history">
+  <div class="calendar-wrap">
+    <div class="cal-header">
+      <button class="cal-nav" onclick="calPrev()">‹</button>
+      <div class="cal-month" id="calMonth"></div>
+      <button class="cal-nav" onclick="calNext()">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+  <div class="section-label">記録一覧</div>
+  <div id="historyList"></div>
+</div>
+
+<!-- STATS -->
+<div class="screen" id="screen-stats">
+  <div class="stats-grid" id="statsGrid"></div>
+  <div class="chart-wrap">
+    <div class="chart-title">直近7日間のセット数</div>
+    <div class="bar-chart" id="barChart"></div>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart-title">過去3ヶ月のトレーニング</div>
+    <div class="heatmap-grid" id="heatmap"></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="screen" id="screen-settings">
+  <div class="settings-section">
+    <div class="settings-title">Google Apps Script URL</div>
+    <div style="margin-bottom:8px">
+      <div class="gas-input-wrap">
+        <input class="gas-input" id="gasUrl" placeholder="https://script.google.com/macros/s/..." type="url">
+        <button class="gas-save-btn" onclick="saveGasUrl()">保存</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">URLを設定後、右上の「同期」ボタンでデータを読み込みます</div>
+    </div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">メニュー管理</div>
+    <div id="menuEditList"></div>
+    <button class="add-btn" onclick="openMenuEditor(-1)">＋ メニューを追加</button>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">経験値 (XP) 設定</div>
+    <div class="xp-settings" id="xpSettings"></div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">データ管理</div>
+    <button class="add-btn" onclick="resetData()" style="border-color:rgba(255,77,109,0.3);color:var(--red)">🗑 全ローカルデータをリセット</button>
+  </div>
+</div>
+
+<!-- 記録入力 Modal -->
+<div class="modal-bg" id="inputModalBg" onclick="closeModal('inputModalBg',event)">
+  <div class="modal-inner">
+    <div class="modal-title" id="modalTitle">💪 記録</div>
+    <div class="field-row">
+      <div class="field"><label>回数</label><input type="number" id="inputReps" min="1" inputmode="numeric"></div>
+      <div class="field"><label>セット数</label><input type="number" id="inputSets" min="1" inputmode="numeric"></div>
+    </div>
+    <div class="field"><label>メモ（任意）</label><input type="text" id="inputNote" placeholder="調子よかった！"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('inputModalBg')">キャンセル</button>
+      <button class="btn-save" id="btnSaveRecord" onclick="saveRecord()">保存 ＋XP</button>
+    </div>
+  </div>
+</div>
+
+<!-- メニュー編集 Modal -->
+<div class="modal-bg" id="menuEditorModal" onclick="closeModal('menuEditorModal',event)">
+  <div class="modal-inner">
+    <div class="modal-title" id="editorTitle">メニューを追加</div>
+    <div class="field" style="margin-bottom:12px"><label>メニュー名</label><input type="text" id="eName" placeholder="例：腕立て伏せ"></div>
+    <div class="field" style="margin-bottom:12px">
+      <label>アイコン</label>
+      <div class="emoji-picker" id="emojiPicker"></div>
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>カラー</label>
+      <div class="color-picker" id="colorPicker"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>目標回数</label><input type="number" id="eReps" min="1" inputmode="numeric"></div>
+      <div class="field"><label>目標セット数</label><input type="number" id="eSets" min="1" inputmode="numeric"></div>
+    </div>
+    <div class="field" style="margin-bottom:0"><label>獲得XP</label><input type="number" id="eXp" min="1" inputmode="numeric"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('menuEditorModal')">キャンセル</button>
+      <button class="btn-save" onclick="saveMenuEditor()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- XP Popup -->
+<div class="xp-popup" id="xpPopup">
+  <div class="xp-popup-amount" id="xpPopupAmt">+30</div>
+  <div class="xp-popup-label">XP獲得！</div>
+</div>
+
+<!-- Level Up -->
+<div class="levelup-popup" id="levelupPopup">
+  <div class="levelup-title">LEVEL UP!</div>
+  <div class="levelup-num" id="levelupNum">2</div>
+  <div class="levelup-sub">新しいレベルに到達しました</div>
+  <button class="levelup-btn" onclick="closeLevelUp()">やったぜ！</button>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-txt" id="loadingTxt">同期中...</div>
+</div>
+
+<script>
+// ── 定数 ──────────────────────────────────────────────────
+const EMOJIS  = ['💪','🏋️','🤸','🦵','🫀','🧠','🔥','⚡','🎯','🥊','🏃','🚴'];
+const COLORS  = ['#00e5a0','#4dabf7','#ff4d6d','#ffa94d','#cc5de8','#63e6be','#ffd43b','#f783ac'];
+const LS_KEY  = 'muscleLog_v2';
+
+// ── State ─────────────────────────────────────────────────
+let S = {
+  gasUrl: '',
+  menus: [
+    {id:1,name:'胸（プッシュアップ）',icon:'💪',color:'#00e5a0',reps:10,sets:3,xp:30},
+    {id:2,name:'腹（クランチ）',      icon:'🤸',color:'#4dabf7',reps:15,sets:3,xp:25},
+    {id:3,name:'腕（パームカール）',  icon:'🦵',color:'#ffa94d',reps:12,sets:3,xp:20}
+  ],
+  records: {},         // { 'YYYY-MM-DD': [{menuId,reps,sets,note,xp}, ...] }
+  totalXp: 0,
+  level: 1,
+  todayDone: {},       // { menuId: {reps,sets,note} }
+  lastDate: '',
+  calYear: new Date().getFullYear(),
+  calMonth: new Date().getMonth(),
+  editingMenuIdx: -1,
+  selectedEmoji: '💪',
+  selectedColor: '#00e5a0',
+  activeMenuId: null
+};
+
+// ── 永続化 ────────────────────────────────────────────────
+function loadLocal() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
+    Object.assign(S, d);
+  } catch(e) {}
+  const td = todayKey();
+  if (S.lastDate !== td) { S.todayDone = {}; S.lastDate = td; }
+  if (!S.calYear) S.calYear = new Date().getFullYear();
+  if (S.calMonth == null) S.calMonth = new Date().getMonth();
+}
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e) {}
+}
+
+// ── ユーティリティ ────────────────────────────────────────
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+}
+function p2(n) { return String(n).padStart(2,'0'); }
+function xpForLevel(lv) { let t=0; for(let i=1;i<lv;i++) t+=i*100; return t; }
+function recalcLevel() {
+  let lv=1;
+  while (S.totalXp >= xpForLevel(lv+1)) lv++;
+  S.level = lv;
+}
+
+// ── GAS API ───────────────────────────────────────────────
+async function gasGet(params) {
+  const url = S.gasUrl + '?' + new URLSearchParams(params);
+  const res = await fetch(url);
+  return res.json();
+}
+async function gasPost(body) {
+  const res = await fetch(S.gasUrl, {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+// ── 同期 ──────────────────────────────────────────────────
+function setSyncState(state) {
+  const dot = document.getElementById('syncDot');
+  dot.className = 'sync-dot' + (state ? ' '+state : '');
+}
+async function syncAll() {
+  if (!S.gasUrl) {
+    alert('設定タブでGAS URLを入力してください');
+    showTab('settings');
+    return;
+  }
+  showLoading('同期中...');
+  setSyncState('ing');
+  try {
+    const data = await gasGet({action:'getAll'});
+    if (data.error) throw new Error(data.error);
+    S.records = data.records || {};
+    S.menus   = data.menus   || S.menus;
+    S.totalXp = data.state?.totalXp ?? S.totalXp;
+    S.level   = data.state?.level   ?? S.level;
+    // 今日分をtodayDoneに反映
+    const tk = todayKey();
+    S.todayDone = {};
+    (S.records[tk]||[]).forEach(r => { S.todayDone[r.menuId] = r; });
+    saveLocal();
+    setSyncState('ok');
+    updateHeader();
+    renderHome();
+    hideLoading();
+  } catch(e) {
+    setSyncState('err');
+    hideLoading();
+    alert('同期エラー: ' + e.message);
+  }
+}
+
+async function pushRecord(date, menuId, reps, sets, note, xp) {
+  if (!S.gasUrl) return;
+  try {
+    await gasPost({action:'saveRecord', date, menuId, reps, sets, note, xp});
+    await gasPost({action:'saveState',  state:{totalXp: S.totalXp, level: S.level}});
+    setSyncState('ok');
+  } catch(e) { setSyncState('err'); }
+}
+
+async function pushMenus() {
+  if (!S.gasUrl) return;
+  try {
+    await gasPost({action:'saveMenus', menus: S.menus});
+    setSyncState('ok');
+  } catch(e) { setSyncState('err'); }
+}
+
+// ── Loading overlay ───────────────────────────────────────
+function showLoading(txt) {
+  document.getElementById('loadingTxt').textContent = txt||'処理中...';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
+
+// ── ヘッダー更新 ──────────────────────────────────────────
+function updateHeader() {
+  const xpNeeded = S.level * 100;
+  const xpInLevel = S.totalXp - xpForLevel(S.level);
+  const pct = Math.min(100, Math.round(xpInLevel / xpNeeded * 100));
+  document.getElementById('levelBadge').textContent = `Lv.${S.level}`;
+  document.getElementById('xpBar').style.width = pct + '%';
+  document.getElementById('xpText').textContent = `${xpInLevel}/${xpNeeded} XP`;
+}
+
+// ── タブ切り替え ──────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name==='history')  renderCalendar();
+  if (name==='stats')    renderStats();
+  if (name==='settings') renderSettings();
+}
+
+// ── HOME ──────────────────────────────────────────────────
+function renderHome() {
+  // Setup banner
+  const banner = document.getElementById('setupBanner');
+  banner.innerHTML = S.gasUrl ? '' : `
+    <div class="setup-banner">
+      <strong>⚙️ 初期設定が必要です</strong>
+      設定タブでGoogle Apps ScriptのURLを入力すると、スプレッドシートにデータが保存されます。
+    </div>`;
+
+  const grid = document.getElementById('menuGrid');
+  grid.innerHTML = '';
+  S.menus.forEach(m => {
+    const done = !!S.todayDone[m.id];
+    const rec  = S.todayDone[m.id];
+    grid.innerHTML += `
+      <div class="menu-card${done?' done':''}" style="--card-color:${m.color}" onclick="tapMenu(${m.id})">
+        <div class="menu-card-icon">${m.icon}</div>
+        <div class="menu-card-name">${m.name}</div>
+        <div class="menu-card-target">目標: ${m.reps}回×${m.sets}セット</div>
+        ${done?`<div class="done-stamp">✓ DONE</div>`:''}
+        <div class="menu-card-check" style="background:${m.color}">✓</div>
+      </div>`;
+  });
+  renderTodayProgress();
+}
+
+function renderTodayProgress() {
+  const el = document.getElementById('todayProgress');
+  const keys = Object.keys(S.todayDone);
+  if (!keys.length) { el.innerHTML = '<span style="color:var(--text3)">まだ記録がありません。メニューをタップして記録しよう！</span>'; return; }
+  el.innerHTML = keys.map(id => {
+    const m = S.menus.find(x => x.id == id); if (!m) return '';
+    const r = S.todayDone[id];
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:20px">${m.icon}</span>
+      <span style="flex:1;font-size:13px">${m.name}</span>
+      <span style="font-size:12px;color:var(--text2)">${r.reps}回×${r.sets}セット</span>
+      <span style="font-size:11px;color:var(--xp);font-family:'Rajdhani',sans-serif">+${m.xp}XP</span>
+    </div>`;
+  }).join('');
+}
+
+// ── 記録入力 ──────────────────────────────────────────────
+function tapMenu(id) {
+  const m = S.menus.find(x => x.id === id); if (!m) return;
+  S.activeMenuId = id;
+  document.getElementById('modalTitle').innerHTML = `${m.icon} ${m.name}`;
+  document.getElementById('inputReps').value = S.todayDone[id]?.reps ?? m.reps;
+  document.getElementById('inputSets').value = S.todayDone[id]?.sets ?? m.sets;
+  document.getElementById('inputNote').value = S.todayDone[id]?.note ?? '';
+  document.getElementById('inputModalBg').classList.add('open');
+}
+
+async function saveRecord() {
+  const id  = S.activeMenuId;
+  const m   = S.menus.find(x => x.id === id); if (!m) return;
+  const reps = parseInt(document.getElementById('inputReps').value) || m.reps;
+  const sets = parseInt(document.getElementById('inputSets').value) || m.sets;
+  const note = document.getElementById('inputNote').value;
+  const tk   = todayKey();
+
+  S.todayDone[id] = {menuId: id, reps, sets, note, xp: m.xp};
+  if (!S.records[tk]) S.records[tk] = [];
+  const idx = S.records[tk].findIndex(r => r.menuId === id);
+  if (idx >= 0) S.records[tk][idx] = {menuId:id,reps,sets,note,xp:m.xp};
+  else S.records[tk].push({menuId:id,reps,sets,note,xp:m.xp});
+
+  const wasLv = S.level;
+  S.totalXp += m.xp;
+  recalcLevel();
+  saveLocal();
+  closeModal('inputModalBg');
+  renderHome();
+  updateHeader();
+  showXpPopup(m.xp);
+  if (S.level > wasLv) setTimeout(() => showLevelUp(S.level), 800);
+
+  // GASに非同期でプッシュ
+  setSyncState('ing');
+  pushRecord(tk, id, reps, sets, note, m.xp);
+}
+
+// ── モーダル制御 ──────────────────────────────────────────
+function closeModal(id, e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById(id).classList.remove('open');
+}
+
+// ── XP/レベルアップ演出 ───────────────────────────────────
+function showXpPopup(xp) {
+  const p = document.getElementById('xpPopup');
+  document.getElementById('xpPopupAmt').textContent = '+' + xp;
+  p.classList.add('show');
+  setTimeout(() => { p.classList.remove('show'); p.classList.add('hide'); setTimeout(()=>p.classList.remove('hide'),300); }, 1200);
+}
+function showLevelUp(lv) {
+  document.getElementById('levelupNum').textContent = lv;
+  document.getElementById('levelupPopup').classList.add('show');
+}
+function closeLevelUp() { document.getElementById('levelupPopup').classList.remove('show'); }
+
+// ── CALENDAR ─────────────────────────────────────────────
+function renderCalendar() {
+  const y = S.calYear, m = S.calMonth;
+  const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  document.getElementById('calMonth').textContent = `${y}年 ${months[m]}`;
+  const td = todayKey(), first = new Date(y,m,1).getDay(), days = new Date(y,m+1,0).getDate();
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+  ['日','月','火','水','木','金','土'].forEach(d => { grid.innerHTML += `<div class="cal-dow">${d}</div>`; });
+  for (let i=0;i<first;i++) grid.innerHTML += '<div class="cal-day"></div>';
+  for (let d=1;d<=days;d++) {
+    const key = `${y}-${p2(m+1)}-${p2(d)}`;
+    const has = !!(S.records[key]?.length);
+    const isToday = key === td;
+    grid.innerHTML += `<div class="cal-day${has?' has-data':''}${isToday?' today':''}">${d}${has?'<span class="dot"></span>':''}</div>`;
+  }
+  renderHistoryList();
+}
+function calPrev() { const d=new Date(S.calYear,S.calMonth-1,1); S.calYear=d.getFullYear(); S.calMonth=d.getMonth(); renderCalendar(); }
+function calNext() { const d=new Date(S.calYear,S.calMonth+1,1); S.calYear=d.getFullYear(); S.calMonth=d.getMonth(); renderCalendar(); }
+
+function renderHistoryList() {
+  const list = document.getElementById('historyList');
+  const prefix = `${S.calYear}-${p2(S.calMonth+1)}`;
+  const keys = Object.keys(S.records).filter(k=>k.startsWith(prefix)&&S.records[k].length).sort().reverse();
+  if (!keys.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">この月の記録はありません</div>'; return; }
+  list.innerHTML = keys.map(k => {
+    const items = S.records[k].map(r => {
+      const m = S.menus.find(x=>x.id===r.menuId); if (!m) return '';
+      return `<div class="hist-item"><span class="hist-dot" style="background:${m.color}"></span>${m.icon} ${r.reps}回×${r.sets}セット</div>`;
+    }).join('');
+    return `<div class="hist-card"><div class="hist-date">📅 ${k}</div><div class="hist-items">${items}</div></div>`;
+  }).join('');
+}
+
+// ── STATS ─────────────────────────────────────────────────
+function renderStats() {
+  const allRecs = Object.values(S.records).flat();
+  const totalDays = Object.keys(S.records).filter(k=>S.records[k].length).length;
+  const streak = calcStreak();
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="stat-val">${S.level}</div><div class="stat-label">現在のレベル</div></div>
+    <div class="stat-card"><div class="stat-val">${S.totalXp}</div><div class="stat-label">総獲得XP</div></div>
+    <div class="stat-card"><div class="stat-val">${totalDays}</div><div class="stat-label">トレーニング日数</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--red)">${streak}</div><div class="stat-label">🔥 連続日数</div></div>`;
+  renderBarChart();
+  renderHeatmap();
+}
+function calcStreak() {
+  let s=0; const d=new Date();
+  while(true) {
+    const k=`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+    if (S.records[k]?.length) s++; else break;
+    d.setDate(d.getDate()-1);
+  }
+  return s;
+}
+function renderBarChart() {
+  const chart=document.getElementById('barChart'); chart.innerHTML='';
+  const days=[]; for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d);}
+  const vals=days.map(d=>{
+    const k=`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+    return (S.records[k]||[]).reduce((a,r)=>a+r.sets,0);
+  });
+  const max=Math.max(...vals,1);
+  const dow=['日','月','火','水','木','金','土'];
+  days.forEach((d,i)=>{
+    const pct=Math.round(vals[i]/max*100);
+    chart.innerHTML+=`<div class="bar-col"><div class="bar" style="height:${pct}%;opacity:${pct>0?0.9:0.2}"></div><div class="bar-label">${dow[d.getDay()]}</div></div>`;
+  });
+}
+function renderHeatmap() {
+  const hm=document.getElementById('heatmap'); hm.innerHTML='';
+  for(let i=83;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const k=`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+    const sets=(S.records[k]||[]).reduce((a,r)=>a+r.sets,0);
+    const v=sets===0?0:sets<=3?1:sets<=6?2:sets<=9?3:4;
+    hm.innerHTML+=`<div class="hm-cell" data-v="${v}" title="${k}"></div>`;
+  }
+}
+
+// ── SETTINGS ─────────────────────────────────────────────
+function renderSettings() {
+  document.getElementById('gasUrl').value = S.gasUrl || '';
+  const list = document.getElementById('menuEditList');
+  list.innerHTML = S.menus.map((m,i) =>
+    `<div class="menu-edit-card">
+      <div class="menu-edit-icon">${m.icon}</div>
+      <div class="menu-edit-info">
+        <div class="menu-edit-name" style="color:${m.color}">${m.name}</div>
+        <div class="menu-edit-detail">${m.reps}回×${m.sets}セット ／ +${m.xp}XP</div>
+      </div>
+      <div class="menu-edit-btns">
+        <button class="btn-edit" onclick="openMenuEditor(${i})">編集</button>
+        <button class="btn-delete" onclick="deleteMenu(${i})">削除</button>
+      </div>
+    </div>`
+  ).join('');
+  const xpEl = document.getElementById('xpSettings');
+  xpEl.innerHTML = S.menus.map(m =>
+    `<div class="xp-row"><div class="xp-row-val" style="font-size:13px;color:var(--text)">${m.icon} ${m.name}</div><div class="xp-row-val">+${m.xp} XP</div></div>`
+  ).join('') +
+  `<div class="xp-row"><div style="font-size:13px;color:var(--text)">次レベルまで</div><div class="xp-row-val">${S.level*100-(S.totalXp-xpForLevel(S.level))} XP</div></div>`;
+}
+
+function saveGasUrl() {
+  S.gasUrl = document.getElementById('gasUrl').value.trim();
+  saveLocal();
+  setSyncState('');
+  alert('URLを保存しました。「同期」ボタンでデータを読み込みます。');
+}
+
+function deleteMenu(i) {
+  if (!confirm('このメニューを削除しますか？')) return;
+  S.menus.splice(i,1); saveLocal(); renderSettings(); renderHome();
+  pushMenus();
+}
+
+function openMenuEditor(idx) {
+  S.editingMenuIdx = idx;
+  const m = idx >= 0 ? S.menus[idx] : null;
+  S.selectedEmoji = m ? m.icon  : EMOJIS[0];
+  S.selectedColor = m ? m.color : COLORS[0];
+  const ep=document.getElementById('emojiPicker'); ep.innerHTML='';
+  EMOJIS.forEach(e => { ep.innerHTML+=`<div class="emoji-opt${e===S.selectedEmoji?' sel':''}" onclick="selEmoji('${e}')">${e}</div>`; });
+  const cp=document.getElementById('colorPicker'); cp.innerHTML='';
+  COLORS.forEach(c => { cp.innerHTML+=`<div class="color-opt${c===S.selectedColor?' sel':''}" style="background:${c}" onclick="selColor('${c}')"></div>`; });
+  document.getElementById('eName').value  = m?.name ?? '';
+  document.getElementById('eReps').value  = m?.reps ?? 10;
+  document.getElementById('eSets').value  = m?.sets ?? 3;
+  document.getElementById('eXp').value    = m?.xp   ?? 30;
+  document.getElementById('editorTitle').textContent = idx>=0 ? 'メニューを編集' : 'メニューを追加';
+  document.getElementById('menuEditorModal').classList.add('open');
+}
+function selEmoji(e) {
+  S.selectedEmoji=e;
+  document.querySelectorAll('.emoji-opt').forEach(el=>el.classList.toggle('sel',el.textContent.trim()===e));
+}
+function selColor(c) {
+  S.selectedColor=c;
+  document.querySelectorAll('.color-opt').forEach(el=>el.classList.toggle('sel',el.style.background===c));
+}
+async function saveMenuEditor() {
+  const name = document.getElementById('eName').value.trim();
+  if (!name) { alert('名前を入力してください'); return; }
+  const obj = {
+    id:    S.editingMenuIdx>=0 ? S.menus[S.editingMenuIdx].id : Date.now(),
+    name, icon: S.selectedEmoji, color: S.selectedColor,
+    reps:  parseInt(document.getElementById('eReps').value)||10,
+    sets:  parseInt(document.getElementById('eSets').value)||3,
+    xp:    parseInt(document.getElementById('eXp').value)||30
+  };
+  if (S.editingMenuIdx>=0) S.menus[S.editingMenuIdx]=obj; else S.menus.push(obj);
+  saveLocal(); renderSettings(); renderHome();
+  closeModal('menuEditorModal');
+  setSyncState('ing');
+  pushMenus();
+}
+
+function resetData() {
+  if (!confirm('全ローカルデータを削除しますか？')) return;
+  S.records={}; S.totalXp=0; S.level=1; S.todayDone={}; S.lastDate='';
+  saveLocal(); updateHeader(); renderHome(); renderSettings();
+  setSyncState('');
+}
+
+// ── 初期化 ───────────────────────────────────────────────
+loadLocal();
+updateHeader();
+renderHome();
+document.getElementById('gasUrl').value = S.gasUrl || '';
+if (S.gasUrl) setSyncState('ok');
+</script>
+</body>
+</html>
