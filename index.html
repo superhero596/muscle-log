@@ -411,8 +411,9 @@ async function syncAll() {
     if (data.error) throw new Error(data.error);
     S.records = data.records || {};
     S.menus   = data.menus   || S.menus;
-    S.totalXp = data.state?.totalXp ?? S.totalXp;
-    S.level   = data.state?.level   ?? S.level;
+    // XPはStateシートを使わずrecordsから毎回再集計
+    S.totalXp = Object.values(S.records).flat().reduce((a, r) => a + Number(r.xp), 0);
+    recalcLevel();
     // 今日分をtodayDoneに反映
     const tk = todayKey();
     S.todayDone = {};
@@ -525,14 +526,14 @@ function renderTodayProgress() {
 
 async function deleteToday(id) {
   if (!confirm('この記録を削除しますか？')) return;
-  const m = S.menus.find(x => x.id == id);
-  if (m) S.totalXp = Math.max(0, S.totalXp - m.xp);
   delete S.todayDone[id];
   const tk = todayKey();
   if (S.records[tk]) {
     S.records[tk] = S.records[tk].filter(r => r.menuId != id);
     if (!S.records[tk].length) delete S.records[tk];
   }
+  // XPをrecordsから全件再集計（ズレ防止）
+  S.totalXp = Object.values(S.records).flat().reduce((a, r) => a + Number(r.xp), 0);
   recalcLevel();
   saveLocal();
   updateHeader();
@@ -573,7 +574,8 @@ async function saveRecord() {
   else S.records[tk].push({menuId:id,reps,sets,note,xp:m.xp});
 
   const wasLv = S.level;
-  S.totalXp += m.xp;
+  // XPをrecordsから全件再集計（重複防止）
+  S.totalXp = Object.values(S.records).flat().reduce((a, r) => a + Number(r.xp), 0);
   recalcLevel();
   saveLocal();
   closeModal('inputModalBg');
