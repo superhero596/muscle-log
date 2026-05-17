@@ -532,8 +532,12 @@ async function deleteToday(id) {
     S.records[tk] = S.records[tk].filter(r => r.menuId != id);
     if (!S.records[tk].length) delete S.records[tk];
   }
-  // XPをrecordsから全件再集計（ズレ防止）
-  S.totalXp = Object.values(S.records).flat().reduce((a, r) => a + Number(r.xp), 0);
+  // XP = 削除後のrecords全件から再集計
+  S.totalXp = Object.values(S.records).flat()
+    .reduce((acc, r) => {
+      const menu = S.menus.find(x => x.id == r.menuId);
+      return acc + (menu ? menu.xp : 0);
+    }, 0);
   recalcLevel();
   saveLocal();
   updateHeader();
@@ -567,22 +571,36 @@ async function saveRecord() {
   const note = document.getElementById('inputNote').value;
   const tk   = todayKey();
 
+  const alreadyDone = !!S.todayDone[id];
+
+  // 常に上書き（1メニュー1日1記録）
   S.todayDone[id] = {menuId: id, reps, sets, note, xp: m.xp};
   if (!S.records[tk]) S.records[tk] = [];
-  const idx = S.records[tk].findIndex(r => r.menuId === id);
+  const idx = S.records[tk].findIndex(r => r.menuId == id);
   if (idx >= 0) S.records[tk][idx] = {menuId:id,reps,sets,note,xp:m.xp};
   else S.records[tk].push({menuId:id,reps,sets,note,xp:m.xp});
 
+  // XP = 今日完了したメニューのXP合計（重複なし）
+  const todayXp = Object.keys(S.todayDone).reduce((a, mid) => {
+    const menu = S.menus.find(x => x.id == mid);
+    return a + (menu ? menu.xp : 0);
+  }, 0);
+  // 過去分XP + 今日分XP で再計算
+  const pastXp = Object.entries(S.records)
+    .filter(([k]) => k !== tk)
+    .flatMap(([, recs]) => recs)
+    .reduce((a, r) => a + Number(r.xp), 0);
   const wasLv = S.level;
-  // XPをrecordsから全件再集計（重複防止）
-  S.totalXp = Object.values(S.records).flat().reduce((a, r) => a + Number(r.xp), 0);
+  S.totalXp = pastXp + todayXp;
   recalcLevel();
   saveLocal();
   closeModal('inputModalBg');
   renderHome();
   updateHeader();
-  showXpPopup(m.xp);
-  if (S.level > wasLv) setTimeout(() => showLevelUp(S.level), 800);
+  if (!alreadyDone) {
+    showXpPopup(m.xp);
+    if (S.level > wasLv) setTimeout(() => showLevelUp(S.level), 800);
+  }
 
   // GASに非同期でプッシュ
   setSyncState('ing');
