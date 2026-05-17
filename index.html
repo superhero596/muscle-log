@@ -406,10 +406,12 @@ function todayKey() {
 function p2(n) { return String(n).padStart(2,'0'); }
 function xpForLevel(lv) { let t=0; for(let i=1;i<lv;i++) t+=i*100; return t; }
 function calcTotalXp() {
-  return Object.values(S.records).flat().reduce((a, r) => {
+  let total = 0;
+  Object.values(S.records).flat().forEach(r => {
     const mn = S.menus.find(x => x.id == r.menuId);
-    return a + (mn ? mn.xp * r.reps * r.sets : 0);
-  }, 0);
+    if (mn) total += mn.xp * r.reps * r.sets;
+  });
+  return total;
 }
 
 function recalcLevel() {
@@ -499,6 +501,7 @@ function hideLoading() {
 
 // ── ヘッダー更新 ──────────────────────────────────────────
 function updateHeader() {
+  recalcLevel();  // 常にtotalXpから再計算
   const xpNeeded = S.level * 100;
   const xpInLevel = S.totalXp - xpForLevel(S.level);
   const pct = Math.min(100, Math.round(xpInLevel / xpNeeded * 100));
@@ -618,11 +621,12 @@ function quickTap(id) {
   const curSets = cur ? cur.sets : 0;
   const newSets = curSets + 1;
 
-  S.todayDone[id] = {menuId: id, reps: m.reps, sets: newSets, note: cur?.note||'', xp: m.xp};
+  const rec = {menuId: id, reps: m.reps, sets: newSets, note: cur?.note||''};
+  S.todayDone[id] = rec;
   if (!S.records[tk]) S.records[tk] = [];
   const idx = S.records[tk].findIndex(r => r.menuId == id);
-  if (idx >= 0) S.records[tk][idx] = {...S.todayDone[id]};
-  else S.records[tk].push({...S.todayDone[id]});
+  if (idx >= 0) S.records[tk][idx] = {...rec};
+  else S.records[tk].push({...rec});
 
   // XP再集計：全records（今日含む）を回数×セット×単価で合計
   const wasLv = S.level;
@@ -941,12 +945,15 @@ function resetData() {
 
 // ── 初期化 ───────────────────────────────────────────────
 loadLocal();
+// 起動時に必ずXP・レベルをrecordsから再計算（localStorageの古い値を上書き）
+S.totalXp = calcTotalXp();
+recalcLevel();
 updateHeader();
 renderHome();
 document.getElementById('gasUrl').value = S.gasUrl || '';
 if (S.gasUrl) {
   setSyncState('ing');
-  syncAll();  // 起動時に自動同期
+  syncAll();
 }
 </script>
 </body>
