@@ -905,7 +905,7 @@ function openMenuEditor(idx) {
   const ep=document.getElementById('emojiPicker'); ep.innerHTML='';
   EMOJIS.forEach(e => { ep.innerHTML+=`<div class="emoji-opt${e===S.selectedEmoji?' sel':''}" onclick="selEmoji('${e}')">${e}</div>`; });
   const cp=document.getElementById('colorPicker'); cp.innerHTML='';
-  COLORS.forEach(c => { cp.innerHTML+=`<div class="color-opt${c===S.selectedColor?' sel':''}" style="background:${c}" onclick="selColor('${c}')"></div>`; });
+  COLORS.forEach(c => { cp.innerHTML+=`<div class="color-opt${c===S.selectedColor?' sel':''}" style="background:${c}" data-color="${c}" onclick="selColor('${c}')"></div>`; });
   document.getElementById('eName').value  = m?.name ?? '';
   document.getElementById('eReps').value  = m?.reps ?? 10;
   document.getElementById('eSets').value  = m?.sets ?? 3;
@@ -919,7 +919,9 @@ function selEmoji(e) {
 }
 function selColor(c) {
   S.selectedColor=c;
-  document.querySelectorAll('.color-opt').forEach(el=>el.classList.toggle('sel',el.style.background===c));
+  document.querySelectorAll('.color-opt').forEach(el=>{
+    el.classList.toggle('sel', el.dataset.color===c);
+  });
 }
 async function saveMenuEditor() {
   const name = document.getElementById('eName').value.trim();
@@ -943,6 +945,24 @@ function resetData() {
   S.records={}; S.totalXp=0; S.level=1; S.todayDone={}; S.lastDate='';
   saveLocal(); updateHeader(); renderHome(); renderSettings();
   setSyncState('');
+}
+
+// ── ServiceWorker登録 ────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // 新バージョン検出→自動リロード
+          newWorker.postMessage({action: 'skipWaiting'});
+        }
+      });
+    });
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
+  });
 }
 
 // ── 初期化 ───────────────────────────────────────────────
