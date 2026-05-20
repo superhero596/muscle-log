@@ -206,6 +206,8 @@ input,select,textarea{font-size:16px !important}
 .preset-name{font-size:15px;font-weight:500}
 .preset-time{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--accent)}
 .preset-edit-btns{display:flex;gap:6px}
+.btn-preview{background:rgba(0,229,160,0.1);border:1px solid var(--accent);border-radius:6px;padding:5px 8px;color:var(--accent);font-size:11px;cursor:pointer;width:100%;text-align:center}
+.btn-preview.playing{background:rgba(0,229,160,0.25);animation:blink 0.8s infinite}
 
 /* ── LOADING ── */
 .loading-overlay{display:none;position:fixed;inset:0;background:rgba(13,15,20,0.85);z-index:400;align-items:center;justify-content:center;flex-direction:column;gap:12px}
@@ -1681,21 +1683,66 @@ function saveTimers() {
   try { localStorage.setItem('muscleTimers', JSON.stringify(timerState.timers)); } catch(e){}
 }
 
+let previewingIdx = -1;
+
+function togglePreview(idx) {
+  // 別のタイマーを試聴中なら止める
+  if (previewingIdx >= 0 && previewingIdx !== idx) {
+    stopPreview();
+  }
+
+  if (previewingIdx === idx) {
+    // 同じボタンをもう一度押したら停止
+    stopPreview();
+    return;
+  }
+
+  const t = timerState.timers[idx];
+  previewingIdx = idx;
+  bgmTrack = t.bgmTrack || 'sweat';
+
+  // timerStateを試聴用に一時設定
+  timerState.running   = false;
+  timerState.remaining = 0;
+  timerState.total     = 60;
+
+  startBGM(true);
+
+  // ボタンをSTOP表示に
+  const btn = document.getElementById(`previewBtn${idx}`);
+  if (btn) { btn.textContent = '■ 停止'; btn.classList.add('playing'); }
+}
+
+function stopPreview() {
+  stopBGM();
+  if (previewingIdx >= 0) {
+    const btn = document.getElementById(`previewBtn${previewingIdx}`);
+    if (btn) { btn.textContent = '▶ 試聴'; btn.classList.remove('playing'); }
+  }
+  previewingIdx = -1;
+}
+
 function renderTimerTab() {
   const list = document.getElementById('presetList');
   list.innerHTML = timerState.timers.map((t,i) => {
     const m = Math.floor(t.seconds/60);
     const s = t.seconds % 60;
     const label = m > 0 ? `${m}分${s > 0 ? s+'秒' : ''}` : `${s}秒`;
+    const trackInfo = t.bgmTrack ? BGM_TRACKS[t.bgmTrack] : null;
+    const trackLabel = trackInfo ? trackInfo.name.split('（')[0] : '';
     return `<div class="preset-card">
       <div class="preset-icon" onclick="startTimer(${i})">${t.icon}</div>
       <div class="preset-info" onclick="startTimer(${i})">
-        <div class="preset-name">${t.name} ${t.bgm ? '<span style="font-size:10px;color:var(--accent)">🎵</span>' : ''}</div>
+        <div class="preset-name">${t.name}</div>
         <div class="preset-time">${label}</div>
+        ${t.bgm ? `<div style="font-size:10px;color:var(--accent);margin-top:2px">🎵 ${trackLabel}</div>` : ''}
       </div>
-      <div class="preset-edit-btns">
-        <button class="btn-edit" onclick="openTimerEditor(${i});event.stopPropagation()">編集</button>
-        <button class="btn-delete" onclick="deleteTimer(${i});event.stopPropagation()">削除</button>
+      <div class="preset-edit-btns" style="flex-direction:column;gap:4px">
+        <div style="display:flex;gap:4px">
+          <button class="btn-edit" onclick="openTimerEditor(${i});event.stopPropagation()">編集</button>
+          <button class="btn-delete" onclick="deleteTimer(${i});event.stopPropagation()">削除</button>
+        </div>
+        ${t.bgm ? `<button class="btn-preview" id="previewBtn${i}" onclick="togglePreview(${i});event.stopPropagation()">▶ 試聴</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1704,6 +1751,7 @@ function renderTimerTab() {
 function startTimer(idx) {
   // 多重起動防止
   if (timerState.running) stopTimer();
+  stopPreview();
 
   const t = timerState.timers[idx];
   timerState.total     = t.seconds;
