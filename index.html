@@ -424,6 +424,7 @@ input,select,textarea{font-size:16px !important}
       <label>BGMスタイル</label>
       <select id="teBgmTrack">
         <option value="sweat">💪 Sweat & Level Up（Claude）</option>
+        <option value="deepgravity">🌊 Deep Gravity（Claude）</option>
         <option value="muscle">🔥 musclemusic！（Gemini）</option>
         <option value="limitbreak">⚡ LIMIT BREAK JUMP!!（ChatGPT）</option>
       </select>
@@ -1058,9 +1059,10 @@ function resetData() {
 
 // ── BGMトラック定義 ──────────────────────────────────────
 const BGM_TRACKS = {
-  sweat:     { name: '💪 Sweat & Level Up（Claude）',   bpm: 147 },
-  muscle:    { name: '🔥 musclemusic！（Gemini）',       bpm: 138 },
-  limitbreak:{ name: '⚡ LIMIT BREAK JUMP!!（ChatGPT）', bpm: 136 },
+  sweat:      { name: '💪 Sweat & Level Up（Claude）',   bpm: 147 },
+  deepgravity:{ name: '🌊 Deep Gravity（Claude）',        bpm: 124 },
+  muscle:     { name: '🔥 musclemusic！（Gemini）',       bpm: 138 },
+  limitbreak: { name: '⚡ LIMIT BREAK JUMP!!（ChatGPT）', bpm: 136 },
 };
 let bgmTrack = 'sweat'; // 現在のトラック
 
@@ -1144,6 +1146,8 @@ function scheduleBGM() {
       playStepMuscle(bgmState.nextBeat, step, chordIdx, elapsed);
     } else if (bgmTrack === 'limitbreak') {
       playStepLimitBreak(bgmState.nextBeat, step, chordIdx, elapsed);
+    } else if (bgmTrack === 'deepgravity') {
+      playStepDeepGravity(bgmState.nextBeat, step, chordIdx, elapsed);
     } else {
       playStep(bgmState.nextBeat, step, chordIdx, elapsed);
     }
@@ -1331,6 +1335,289 @@ function playLead(ctx, time, freq) {
   gain.gain.setValueAtTime(0.22, time);
   gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_STEP * 0.85);
   osc.start(time); osc.stop(time + BGM_STEP);
+}
+
+
+// ── Deep Gravity（Claude本気作） ─────────────────────────
+// BPM124 ディープハウス
+// コンセプト：主張しすぎず、体が勝手に動く。気づいたら1分経ってた。
+const DG_BPM  = 124;
+const DG_BEAT = 60 / DG_BPM;
+const DG_STEP = DG_BEAT / 4;
+
+// Am7 -> Dm7 -> Fmaj7 -> Em7 （暗すぎず、明るすぎない浮遊感）
+const DG_CHORDS = [
+  [220.0, 261.6, 293.7, 329.6],  // Am7
+  [146.8, 174.6, 220.0, 261.6],  // Dm7
+  [174.6, 220.0, 261.6, 329.6],  // Fmaj7
+  [164.8, 196.0, 246.9, 293.7],  // Em7
+];
+
+// ベースライン：うねるように動く
+const DG_BASS_PATTERN = [
+  1,0,0,0, 1,0,1,0, 0,1,0,0, 1,0,0,1,
+];
+// ハウスらしいシンコペーション
+const DG_SYNTH_HITS = [0,0,0,0, 1,0,0,0, 0,0,1,0, 0,1,0,0];
+
+// ノイズバッファキャッシュ
+let _dgNoise = null;
+function getDgNoise(ctx) {
+  if (!_dgNoise) {
+    _dgNoise = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
+    const d = _dgNoise.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  return _dgNoise;
+}
+
+// マスターチェーン（コンプ+サチュレーション）
+let _dgFx = null;
+function getDgFx(ctx) {
+  if (!_dgFx) {
+    const master = ctx.createGain();
+    const comp   = ctx.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.knee.value      = 20;
+    comp.ratio.value     = 5;
+    comp.attack.value    = 0.002;
+    comp.release.value   = 0.2;
+    master.gain.value    = 0.78;
+    master.connect(comp);
+    comp.connect(ctx.destination);
+    _dgFx = { input: master };
+  }
+  return _dgFx;
+}
+
+function playStepDeepGravity(time, step, chordIdx, elapsed) {
+  const ctx   = getAudioCtx();
+  const fx    = getDgFx(ctx);
+  const dest  = fx.input;
+  const b16   = step % 16;
+  const chord = DG_CHORDS[chordIdx];
+  const root  = chord[0];
+
+  const total   = timerState.total || 60;
+  const tRemain = timerState.remaining || 0;
+  const sec     = timerState.running ? (total - tRemain) : elapsed;
+
+  // 全体の進行度（0〜1）
+  const progress = Math.min(sec / total, 1.0);
+
+  // ── フィルターの開き具合（徐々に明るくなる） ────────────
+  const filterOpen = 400 + progress * 3600;
+
+  // ── 【0〜8秒】イントロ：パッドと静かなハット ────────────
+  if (sec < 8) {
+    if (b16 === 0) dgPad(ctx, dest, chord, time, DG_BEAT*4, 0.10, 600);
+    if (b16 % 4 === 2) dgHat(ctx, dest, time, 0.08, true);
+    return;
+  }
+
+  // ── 【8秒〜】キック4つ打ち（ディープで重い） ────────────
+  if (b16 % 4 === 0) dgKick(ctx, dest, time);
+
+  // ── スネア（2,4拍目）＋リム ──────────────────────────────
+  if (b16 === 8) dgSnare(ctx, dest, time);
+  if (b16 === 4 || b16 === 12) dgRim(ctx, dest, time);
+
+  // ── ハット：16分で刻む。裏が強め ─────────────────────────
+  if (b16 % 2 === 1) dgHat(ctx, dest, time, 0.22, true);   // オフビート強め
+  else               dgHat(ctx, dest, time, 0.06, false);
+
+  // ── ベースライン（うねるサイドチェーン風） ────────────────
+  if (DG_BASS_PATTERN[b16]) {
+    const bassVol = 0.35 + Math.sin(progress * Math.PI) * 0.15;
+    dgBass(ctx, dest, root * 0.5, time, DG_STEP * 1.8, bassVol);
+  }
+
+  // ── パッドコード（フィルターが徐々に開く） ───────────────
+  if (b16 === 0) dgPad(ctx, dest, chord, time, DG_BEAT*4, 0.07, filterOpen);
+
+  // ── 【20秒〜】シンセヒット ───────────────────────────────
+  if (sec >= 20 && DG_SYNTH_HITS[b16]) {
+    dgSynthHit(ctx, dest, chord[2], time);
+  }
+
+  // ── 【30秒】ドロップ：ベースとパッドが一瞬消えてキックだけ ─
+  // ドロップ前後の切り替えは自然にsecで管理
+  const isDropZone = sec >= 28 && sec < 32;
+  if (isDropZone) return; // ドロップゾーンは一瞬の静寂
+
+  // ── 【32秒〜45秒】メインフック：リードが入る ─────────────
+  if (sec >= 32 && sec < 45) {
+    const hookNotes = [
+      chord[2], null, chord[1], null,
+      chord[2], chord[3], null, chord[2],
+      null, chord[1], chord[2], null,
+      chord[3], null, chord[2], chord[1],
+    ];
+    const note = hookNotes[b16];
+    if (note) dgLead(ctx, dest, note * 2, time, DG_STEP * 0.85);
+  }
+
+  // ── 【45秒〜55秒】ラストスパート：ハット倍速＋リード高音 ──
+  if (sec >= 45 && sec < (total-5)) {
+    // ハットを倍速で追加
+    if (b16 % 2 === 0) dgHat(ctx, dest, time, 0.15, false);
+    // リード1オクターブ上
+    const hookNotes = [
+      chord[2], chord[1], chord[2], chord[3],
+      chord[2], null, chord[1], chord[2],
+      chord[3], chord[2], chord[1], null,
+      chord[2], chord[3], chord[2], chord[1],
+    ];
+    const note = hookNotes[b16];
+    if (note) dgLead(ctx, dest, note * 4, time, DG_STEP * 0.7);
+  }
+
+  // ── 【残り5秒】ライザー＋ドラムロール ────────────────────
+  if (sec >= (total-5)) {
+    const p = (sec-(total-5))/5;
+    dgRiser(ctx, dest, time, p);
+    if (b16 % 2 === 0) dgSnare(ctx, dest, time);
+  }
+}
+
+// ── Deep Gravity 楽器群 ───────────────────────────────────
+
+function dgKick(ctx, dest, time) {
+  // 深いサブキック
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const sub  = ctx.createOscillator();
+  const subG = ctx.createGain();
+  // メインボディ
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(120, time);
+  osc.frequency.exponentialRampToValueAtTime(36, time + 0.18);
+  gain.gain.setValueAtTime(1.1, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+  osc.connect(gain); gain.connect(dest);
+  osc.start(time); osc.stop(time + 0.25);
+  // サブ（さらに低いボディ感）
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(60, time);
+  sub.frequency.exponentialRampToValueAtTime(28, time + 0.3);
+  subG.gain.setValueAtTime(0.6, time);
+  subG.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+  sub.connect(subG); subG.connect(dest);
+  sub.start(time); sub.stop(time + 0.32);
+}
+
+function dgSnare(ctx, dest, time) {
+  const buf  = ctx.createBuffer(1, ctx.sampleRate*0.2, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.05));
+  const src  = ctx.createBufferSource();
+  const fil  = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  src.buffer = buf; fil.type='bandpass'; fil.frequency.value=900; fil.Q.value=1.2;
+  gain.gain.setValueAtTime(0.5, time); gain.gain.exponentialRampToValueAtTime(0.001, time+0.18);
+  src.connect(fil); fil.connect(gain); gain.connect(dest);
+  src.start(time); src.stop(time+0.2);
+}
+
+function dgRim(ctx, dest, time) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle'; osc.frequency.value = 1200;
+  gain.gain.setValueAtTime(0.18, time); gain.gain.exponentialRampToValueAtTime(0.001, time+0.04);
+  osc.connect(gain); gain.connect(dest); osc.start(time); osc.stop(time+0.05);
+}
+
+function dgHat(ctx, dest, time, vol, open) {
+  const dur  = open ? 0.09 : 0.025;
+  const buf  = ctx.createBuffer(1, Math.floor(ctx.sampleRate*dur), ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1);
+  const src  = ctx.createBufferSource();
+  const fil  = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  src.buffer = buf; fil.type='highpass'; fil.frequency.value=open?6500:10000;
+  gain.gain.setValueAtTime(vol, time); gain.gain.exponentialRampToValueAtTime(0.001, time+dur);
+  src.connect(fil); fil.connect(gain); gain.connect(dest);
+  src.start(time); src.stop(time+dur+0.005);
+}
+
+function dgBass(ctx, dest, freq, time, dur, vol) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const fil  = ctx.createBiquadFilter();
+  osc.type='sawtooth'; osc.frequency.value=freq;
+  fil.type='lowpass'; fil.frequency.value=380; fil.Q.value=2.5;
+  // うねり感：音量がじわっと上がる
+  gain.gain.setValueAtTime(0.01, time);
+  gain.gain.linearRampToValueAtTime(vol, time+DG_STEP*0.3);
+  gain.gain.exponentialRampToValueAtTime(0.001, time+dur);
+  osc.connect(fil); fil.connect(gain); gain.connect(dest);
+  osc.start(time); osc.stop(time+dur+0.05);
+}
+
+function dgPad(ctx, dest, freqs, time, dur, vol, filterFreq) {
+  freqs.forEach((freq, i) => {
+    // 各音をわずかにデチューンしてゆらぎを出す
+    const detunes = [-8, -3, 0, 5];
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const fil  = ctx.createBiquadFilter();
+    osc.type='sawtooth'; osc.frequency.value=freq; osc.detune.value=detunes[i]||0;
+    fil.type='lowpass'; fil.frequency.value=filterFreq;
+    // ゆっくりフェードイン・アウト
+    gain.gain.setValueAtTime(0.001, time);
+    gain.gain.linearRampToValueAtTime(vol*(0.7+i*0.1), time+DG_BEAT*0.5);
+    gain.gain.linearRampToValueAtTime(vol*(0.7+i*0.1), time+dur-DG_BEAT*0.3);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+dur);
+    osc.connect(fil); fil.connect(gain); gain.connect(dest);
+    osc.start(time); osc.stop(time+dur+0.1);
+  });
+}
+
+function dgSynthHit(ctx, dest, freq, time) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const fil  = ctx.createBiquadFilter();
+  osc.type='square'; osc.frequency.value=freq*2;
+  fil.type='bandpass'; fil.frequency.value=2000; fil.Q.value=3;
+  gain.gain.setValueAtTime(0.18, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time+DG_STEP*1.5);
+  osc.connect(fil); fil.connect(gain); gain.connect(dest);
+  osc.start(time); osc.stop(time+DG_STEP*1.6);
+}
+
+function dgLead(ctx, dest, freq, time, dur) {
+  // ディチューン2声でハウスらしい太さ
+  [0, 7].forEach(detune => {
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const fil  = ctx.createBiquadFilter();
+    osc.type='sawtooth'; osc.frequency.value=freq; osc.detune.value=detune;
+    fil.type='lowpass';
+    fil.frequency.setValueAtTime(3500, time);
+    fil.frequency.exponentialRampToValueAtTime(1200, time+dur*0.8);
+    gain.gain.setValueAtTime(0.16, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+dur);
+    osc.connect(fil); fil.connect(gain); gain.connect(dest);
+    osc.start(time); osc.stop(time+dur+0.02);
+  });
+}
+
+function dgRiser(ctx, dest, time, progress) {
+  const bufSize = Math.floor(ctx.sampleRate * DG_STEP);
+  if(bufSize <= 0) return;
+  const buf  = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for(let i=0;i<bufSize;i++) data[i]=(Math.random()*2-1);
+  const src  = ctx.createBufferSource();
+  const fil  = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  src.buffer=buf; fil.type='bandpass';
+  fil.frequency.value = 800 + progress*6000; fil.Q.value=3;
+  gain.gain.setValueAtTime(0.12+progress*0.2, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time+DG_STEP*0.95);
+  src.connect(fil); fil.connect(gain); gain.connect(dest);
+  src.start(time); src.stop(time+DG_STEP);
 }
 
 // ── musclemusic！（Gemini作） ───────────────────────────
