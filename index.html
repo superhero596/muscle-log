@@ -2012,18 +2012,14 @@ function getAudioCtx() {
   return _audioCtx;
 }
 
-// ── 共通ノイズバッファ（全曲・全効果音で使い回す） ────────
-let _sharedNoise = null;
-function getSharedNoise(ctx) {
-  if (!_sharedNoise || _sharedNoise.sampleRate !== ctx.sampleRate) {
-    const buf  = ctx.createBuffer(2, ctx.sampleRate * 2, ctx.sampleRate);
-    for (let ch = 0; ch < 2; ch++) {
-      const d = buf.getChannelData(ch);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    }
-    _sharedNoise = buf;
-  }
-  return _sharedNoise;
+// ── ノイズバッファ生成（同時再生干渉防止のため毎回生成） ──
+function getSharedNoise(ctx, dur=0.15) {
+  // 同じBufferSourceを複数startするとノイズが出るため毎回新規生成
+  const len = Math.ceil(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
 }
 
 // ユーザー操作時にAudioContextを確実に起動する
