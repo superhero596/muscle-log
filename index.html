@@ -1042,26 +1042,54 @@ function resetData() {
   setSyncState('');
 }
 
-// ── BGM生成 ──────────────────────────────────────────────
-let bgmState = { playing: false, nodes: [], nextBeat: 0, scheduleId: null };
+// ── BGM生成（ユーロビート風） ────────────────────────────
+let bgmState = { playing: false, scheduleId: null, nextBeat: 0, beat: 0, chord: 0, dropped: false };
 
-const BGM_BPM = 175;  // ノリノリEDM
-const BGM_BEAT = 60 / BGM_BPM;
+const BGM_BPM   = 147;
+const BGM_BEAT  = 60 / BGM_BPM;       // 1拍の長さ（秒）
+const BGM_STEP  = BGM_BEAT / 4;       // 16分音符
 
-// コード進行 (Am - F - C - G) 高め
+// F -> G -> Em -> Am （哀愁王道進行）
+// [ルート, 3rd, 5th]  中高音域
 const CHORDS = [
-  [440.0, 523.3, 659.3], // Am
-  [349.2, 440.0, 523.3], // F
-  [261.6, 329.6, 392.0], // C
-  [392.0, 493.9, 587.3], // G
+  [349.2, 440.0, 523.3],  // F
+  [392.0, 493.9, 587.3],  // G
+  [329.6, 392.0, 493.9],  // Em
+  [220.0, 261.6, 329.6],  // Am
 ];
 
-function startBGM() {
+// 哀愁リードメロディ（32ステップ、コード構成音インデックス or null）
+// F -> G -> Em -> Am を2周で1ループ
+const MELODY = [
+  // F
+  2,null,1,null,0,null,2,1,
+  // G
+  2,null,null,1,2,null,1,0,
+  // Em
+  1,2,null,2,1,null,0,null,
+  // Am
+  2,null,1,0,null,1,2,null,
+  // F (2周目)
+  1,null,2,null,2,1,0,null,
+  // G
+  2,null,1,null,2,null,null,1,
+  // Em
+  0,1,2,null,1,null,2,null,
+  // Am
+  2,1,null,0,null,null,1,2,
+];
+
+function toggleBGM() {
+  bgmState.playing ? stopBGM() : startBGM();
+}
+
+function startBGM(drop=false) {
   if (bgmState.playing) return;
-  bgmState.playing = true;
-  bgmState.beat = 0;
-  bgmState.chord = 0;
-  bgmState.nextBeat = getAudioCtx().currentTime + 0.1;
+  bgmState.playing  = true;
+  bgmState.beat     = 0;
+  bgmState.chord    = 0;
+  bgmState.dropped  = drop;
+  bgmState.nextBeat = getAudioCtx().currentTime + 0.05;
   scheduleBGM();
   document.getElementById('bgmBtn').textContent = '🔇 BGM OFF';
 }
@@ -1069,148 +1097,159 @@ function startBGM() {
 function stopBGM() {
   bgmState.playing = false;
   clearTimeout(bgmState.scheduleId);
-  bgmState.nodes.forEach(n => { try { n.stop(); } catch(e){} });
-  bgmState.nodes = [];
+  bgmState.scheduleId = null;
   document.getElementById('bgmBtn').textContent = '🎵 BGM ON';
-}
-
-function toggleBGM() {
-  bgmState.playing ? stopBGM() : startBGM();
 }
 
 function scheduleBGM() {
   if (!bgmState.playing) return;
-  const ctx = getAudioCtx();
-  const LOOKAHEAD = 0.3;
-  const SCHEDULE_INTERVAL = 100;
+  const ctx       = getAudioCtx();
+  const LOOKAHEAD = 0.25;
 
   while (bgmState.nextBeat < ctx.currentTime + LOOKAHEAD) {
-    playBeat(bgmState.nextBeat, bgmState.beat, bgmState.chord);
+    const step = bgmState.beat % 64;   // 64ステップ（16分×16拍×4コード）
+    const chordIdx = Math.floor(step / 16) % CHORDS.length;
+
+    playStep(bgmState.nextBeat, step, chordIdx, bgmState.dropped);
+
     bgmState.beat++;
-    if (bgmState.beat % 16 === 0) bgmState.chord = (bgmState.chord + 1) % CHORDS.length;
-    bgmState.nextBeat += BGM_BEAT / 2;
+    bgmState.nextBeat += BGM_STEP;
   }
-  bgmState.scheduleId = setTimeout(scheduleBGM, SCHEDULE_INTERVAL);
+  bgmState.scheduleId = setTimeout(scheduleBGM, 80);
 }
 
-function makeNode(ctx) {
-  const node = { stop: () => {} };
-  return node;
-}
-
-function playBeat(time, beat, chordIdx) {
+function playStep(time, step, chordIdx, dropped) {
   const ctx = getAudioCtx();
-  const b = beat % 16;
+  const b16 = step % 16;   // 16分音符内の位置（0〜15）
+  const b4  = b16 % 4;     // 4分音符内の位置
 
-  // キック：4つ打ち（全拍）＋アクセント
-  if (b % 4 === 0) playKick(ctx, time, b === 0 ? 1.2 : 1.0);
+  // ── リズム ──────────────────────────────────────────
+  if (dropped) {
+    // キック：4つ打ち（0,4,8,12）
+    if (b16 % 4 === 0) playKick(ctx, time);
 
-  // スネア：4, 12拍目
-  if (b === 4 || b === 12) playSnare(ctx, time);
+    // スネア＋クラップ：4, 12
+    if (b16 === 4 || b16 === 12) {
+      playSnare(ctx, time);
+      playClap(ctx, time);
+    }
 
-  // クラップ：スネアと同時
-  if (b === 4 || b === 12) playClap(ctx, time);
+    // ハイハット：裏打ち強調（ダッカダッカ）
+    // 表：軽く、裏（2,6,10,14）：強く
+    if (b16 % 2 === 0) playHihat(ctx, time, 0.08, false);
+    else               playHihat(ctx, time, 0.28, true);  // 裏強め
 
-  // ハイハット：8分で刻む、オフビートは強め
-  playHihat(ctx, time, b % 4 === 2 ? 0.25 : 0.12);
+    // オクターブベース
+    const rootFreq = CHORDS[chordIdx][0];
+    if (b16 === 0 || b16 === 2)  playBass(ctx, time, rootFreq * 0.5, 0.38); // 低オクターブ
+    if (b16 === 4 || b16 === 6)  playBass(ctx, time, rootFreq,       0.28); // 高オクターブ
+    if (b16 === 8 || b16 === 10) playBass(ctx, time, rootFreq * 0.5, 0.38);
+    if (b16 === 12|| b16 === 14) playBass(ctx, time, rootFreq,       0.28);
 
-  // ベースライン：ガツンと
-  if (b === 0 || b === 3 || b === 8 || b === 11) {
-    playBass(ctx, time, CHORDS[chordIdx][0] * 0.5);
+  } else {
+    // ドロップ前：静かなビルドアップ（ハイハット＋シンセのみ）
+    if (b16 % 2 === 1) playHihat(ctx, time, 0.12, false);
   }
 
-  // シンセコード：8拍ごと
-  if (b === 0 || b === 8) {
-    playSynth(ctx, time, CHORDS[chordIdx]);
-  }
+  // ── ハーモニー ───────────────────────────────────────
+  // コード切り替えタイミング（各コード16ステップ）
+  if (b16 === 0) playSynth(ctx, time, CHORDS[chordIdx], dropped ? 0.07 : 0.12);
 
-  // リード：ノリノリメロディ
-  const melodies = [0,null,1,2,null,1,0,null,2,null,1,null,2,1,0,null];
-  const noteIdx = melodies[b];
-  if (noteIdx !== null) {
-    playLead(ctx, time, CHORDS[chordIdx][noteIdx]);
+  // ── リードメロディ ────────────────────────────────────
+  const melIdx = MELODY[step % MELODY.length];
+  if (melIdx !== null) {
+    const freq = CHORDS[chordIdx][melIdx];
+    playLead(ctx, time, freq * (dropped ? 2 : 1));
   }
 }
 
-function playClap(ctx, time) {
-  const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = (Math.random()*2-1) * Math.exp(-i/(ctx.sampleRate*0.02));
-  const src  = ctx.createBufferSource();
-  const gain = ctx.createGain();
-  const fil  = ctx.createBiquadFilter();
-  src.buffer = buf;
-  fil.type = 'bandpass'; fil.frequency.value = 1200; fil.Q.value = 0.8;
-  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
-  gain.gain.setValueAtTime(0.5, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
-  src.start(time); src.stop(time + 0.1);
-}
-
-function playKick(ctx, time, vol=1.0) {
+// ── 楽器 ──────────────────────────────────────────────
+function playKick(ctx, time) {
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain); gain.connect(ctx.destination);
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(180, time);
-  osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.25);
-  gain.gain.setValueAtTime(vol, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
-  osc.start(time); osc.stop(time + 0.3);
+  osc.frequency.setValueAtTime(160, time);
+  osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
+  gain.gain.setValueAtTime(1.1, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+  osc.start(time); osc.stop(time + 0.25);
 }
 
 function playSnare(ctx, time) {
-  const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+  const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.18, ctx.sampleRate);
   const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1);
+  for (let i = 0; i < data.length; i++)
+    data[i] = (Math.random()*2-1) * Math.exp(-i / (ctx.sampleRate * 0.04));
   const src  = ctx.createBufferSource();
   const gain = ctx.createGain();
   const fil  = ctx.createBiquadFilter();
   src.buffer = buf;
-  fil.type = 'highpass'; fil.frequency.value = 1000;
+  fil.type = 'highpass'; fil.frequency.value = 800;
   src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
-  gain.gain.setValueAtTime(0.4, time);
+  gain.gain.setValueAtTime(0.55, time);
   gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-  src.start(time); src.stop(time + 0.2);
+  src.start(time); src.stop(time + 0.18);
 }
 
-function playHihat(ctx, time, vol) {
-  const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+function playClap(ctx, time) {
+  for (let i = 0; i < 3; i++) {
+    const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let j = 0; j < data.length; j++) data[j] = (Math.random()*2-1);
+    const src  = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    const fil  = ctx.createBiquadFilter();
+    src.buffer = buf;
+    fil.type = 'bandpass'; fil.frequency.value = 1100; fil.Q.value = 0.7;
+    src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+    const t = time + i * 0.012;
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    src.start(t); src.stop(t + 0.06);
+  }
+}
+
+function playHihat(ctx, time, vol, open) {
+  const dur  = open ? 0.08 : 0.03;
+  const buf  = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
   const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random()*2-1);
   const src  = ctx.createBufferSource();
   const gain = ctx.createGain();
   const fil  = ctx.createBiquadFilter();
   src.buffer = buf;
-  fil.type = 'highpass'; fil.frequency.value = 8000;
+  fil.type = 'highpass'; fil.frequency.value = open ? 7000 : 9000;
   src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
   gain.gain.setValueAtTime(vol, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
-  src.start(time); src.stop(time + 0.06);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+  src.start(time); src.stop(time + dur + 0.01);
 }
 
-function playBass(ctx, time, freq) {
+function playBass(ctx, time, freq, vol) {
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.connect(gain); gain.connect(ctx.destination);
+  const fil  = ctx.createBiquadFilter();
+  osc.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
   osc.type = 'sawtooth';
   osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.25, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_BEAT * 0.9);
-  osc.start(time); osc.stop(time + BGM_BEAT);
+  fil.type = 'lowpass'; fil.frequency.value = 600;
+  gain.gain.setValueAtTime(vol, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_STEP * 1.8);
+  osc.start(time); osc.stop(time + BGM_STEP * 2);
 }
 
-function playSynth(ctx, time, freqs) {
-  freqs.forEach(freq => {
+function playSynth(ctx, time, freqs, vol) {
+  freqs.forEach((freq, i) => {
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
     osc.type = 'square';
-    osc.frequency.value = freq * 2;
-    gain.gain.setValueAtTime(0.06, time);
-    gain.gain.setValueAtTime(0.04, time + BGM_BEAT * 2);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_BEAT * 7.9);
-    osc.start(time); osc.stop(time + BGM_BEAT * 8);
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol * (i === 0 ? 1 : 0.6), time);
+    gain.gain.setValueAtTime(vol * 0.5 * (i === 0 ? 1 : 0.6), time + BGM_STEP * 8);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_STEP * 15.5);
+    osc.start(time); osc.stop(time + BGM_STEP * 16);
   });
 }
 
@@ -1221,10 +1260,12 @@ function playLead(ctx, time, freq) {
   osc.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
   osc.type = 'sawtooth';
   osc.frequency.value = freq;
-  fil.type = 'lowpass'; fil.frequency.value = 3000;
-  gain.gain.setValueAtTime(0.18, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_BEAT * 0.35);
-  osc.start(time); osc.stop(time + BGM_BEAT * 0.4);
+  fil.type = 'lowpass';
+  fil.frequency.setValueAtTime(4000, time);
+  fil.frequency.exponentialRampToValueAtTime(1500, time + BGM_STEP * 0.8);
+  gain.gain.setValueAtTime(0.22, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_STEP * 0.85);
+  osc.start(time); osc.stop(time + BGM_STEP);
 }
 
 // ── タイマー機能 ─────────────────────────────────────────
@@ -1327,6 +1368,8 @@ function startTimer(idx) {
   label.textContent = '準備して！';
 
   beep(880, 0, 0.15);
+  // ビルドアップ：BGMがONなら静かモードで先行スタート
+  if (document.getElementById('bgmBtn').textContent === '🔇 BGM OFF') startBGM(false);
 
   const cdId = setInterval(() => {
     count--;
@@ -1338,6 +1381,9 @@ function startTimer(idx) {
       countdown.textContent = 'GO!';
       label.textContent = t.name;
       beep(1100, 0, 0.3, 0.5);
+      // GO!でドロップ
+      stopBGM();
+      setTimeout(() => startBGM(true), 50);
 
       setTimeout(() => {
         if (!timerState.running) return;
