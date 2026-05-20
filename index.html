@@ -423,6 +423,8 @@ input,select,textarea{font-size:16px !important}
     <div class="field" style="margin-bottom:12px">
       <label>BGMスタイル</label>
       <select id="teBgmTrack">
+        <option value="rotation">🔄 ローテーション（順番）</option>
+        <option value="random">🎲 ランダム</option>
         <option value="sweat">💪 Sweat & Level Up（Claude）</option>
         <option value="deepgravity">🌊 Deep Gravity（Claude）</option>
         <option value="muscle">🔥 musclemusic！（Gemini）</option>
@@ -1063,7 +1065,23 @@ const BGM_TRACKS = {
   deepgravity:{ name: '🌊 Deep Gravity（Claude）',        bpm: 124 },
   muscle:     { name: '🔥 musclemusic！（Gemini）',       bpm: 138 },
   limitbreak: { name: '⚡ LIMIT BREAK JUMP!!（ChatGPT）', bpm: 136 },
+  rotation:   { name: '🔄 ローテーション（順番）',         bpm: 0   },
+  random:     { name: '🎲 ランダム',                      bpm: 0   },
 };
+const ROTATION_TRACKS = ['sweat','deepgravity','muscle','limitbreak'];
+let rotationIdx = 0;
+
+function resolveTrack(trackKey) {
+  if (trackKey === 'random') {
+    return ROTATION_TRACKS[Math.floor(Math.random() * ROTATION_TRACKS.length)];
+  }
+  if (trackKey === 'rotation') {
+    const t = ROTATION_TRACKS[rotationIdx % ROTATION_TRACKS.length];
+    rotationIdx++;
+    return t;
+  }
+  return trackKey;
+}
 let bgmTrack = 'sweat'; // 現在のトラック
 
 // ── BGM生成（ユーロビート風） ────────────────────────────
@@ -1922,7 +1940,7 @@ function lbFinishAlarm(ctx, dest, time) {
 // ── タイマー機能 ─────────────────────────────────────────
 const DEFAULT_TIMERS = [
   {id:1, name:'プランク',           icon:'🧘', seconds:30, bgm:false, bgmTrack:'sweat'},
-  {id:2, name:'ジャンプダイエット', icon:'🦘', seconds:60, bgm:true,  bgmTrack:'limitbreak'},
+  {id:2, name:'ジャンプダイエット', icon:'🦘', seconds:60, bgm:true,  bgmTrack:'rotation'},
 ];
 
 let timerState = {
@@ -2006,7 +2024,10 @@ function togglePreview(idx) {
 
   const t = timerState.timers[idx];
   previewingIdx = idx;
-  bgmTrack = t.bgmTrack || 'sweat';
+  bgmTrack = resolveTrack(t.bgmTrack || 'sweat');
+  // ローテーション/ランダム時は曲名を表示
+  const resolvedName = BGM_TRACKS[bgmTrack]?.name || '';
+  document.getElementById('timerName').textContent = '';  // 後でstartTimerが上書き
 
   // timerStateを試聴用に一時設定
   timerState.running   = false;
@@ -2036,7 +2057,7 @@ function renderTimerTab() {
     const s = t.seconds % 60;
     const label = m > 0 ? `${m}分${s > 0 ? s+'秒' : ''}` : `${s}秒`;
     const trackInfo = t.bgmTrack ? BGM_TRACKS[t.bgmTrack] : null;
-    const trackLabel = trackInfo ? trackInfo.name.split('（')[0] : '';
+    const trackLabel = trackInfo ? trackInfo.name : '';
     return `<div class="preset-card">
       <div class="preset-icon" onclick="startTimer(${i})">${t.icon}</div>
       <div class="preset-info" onclick="startTimer(${i})">
@@ -2107,7 +2128,11 @@ function startTimer(idx) {
       // GO!でドロップ（BGMありタイマーのみ）
       if (useBGM) {
         stopBGM();
-        setTimeout(() => startBGM(true), 50);
+        setTimeout(() => {
+          startBGM(true);
+          const tname = BGM_TRACKS[bgmTrack]?.name || '';
+          document.getElementById('timerName').textContent = `${t.icon} ${t.name}　🎵 ${tname}`;
+        }, 50);
       }
 
       setTimeout(() => {
