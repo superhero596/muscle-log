@@ -422,14 +422,18 @@ input,select,textarea{font-size:16px !important}
     </div>
     <div class="field" style="margin-bottom:12px">
       <label>BGMスタイル</label>
-      <select id="teBgmTrack">
-        <option value="rotation">🔄 ローテーション（順番）</option>
-        <option value="random">🎲 ランダム</option>
-        <option value="sweat">💪 Sweat & Level Up（Claude）</option>
-        <option value="deepgravity">🌊 Deep Gravity（Claude）</option>
-        <option value="muscle">🔥 musclemusic！（Gemini）</option>
-        <option value="limitbreak">⚡ LIMIT BREAK JUMP!!（ChatGPT）</option>
-      </select>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="teBgmTrack" style="flex:1" onchange="updateModalPreviewBtn()">
+          <option value="rotation">🔄 ローテーション（順番）</option>
+          <option value="random">🎲 ランダム</option>
+          <option value="sweat">💪 Sweat & Level Up（Claude）</option>
+          <option value="deepgravity">🌊 Deep Gravity（Claude）</option>
+          <option value="muscle">🔥 musclemusic！（Gemini）</option>
+          <option value="limitbreak">⚡ LIMIT BREAK JUMP!!（ChatGPT）</option>
+        </select>
+        <button id="modalPreviewBtn" class="btn-preview" style="width:64px;flex-shrink:0"
+          onclick="toggleModalPreview()">▶ 試聴</button>
+      </div>
     </div>
     <div class="field" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between">
       <label style="margin-bottom:0">BGMをデフォルトON</label>
@@ -483,7 +487,7 @@ let S = {
     {id:2, name:'腹（クランチ）',          icon:'🤸', color:'#4dabf7', reps:10, sets:3, xp:2},
     {id:3, name:'腕（ダンベルカール）3kg', icon:'🏋️', color:'#ffa94d', reps:20, sets:3, xp:1},
     {id:4, name:'スクワット',              icon:'🦵', color:'#cc5de8', reps:10, sets:3, xp:2},
-    {id:5, name:'プランク（30秒）',        icon:'🧘', color:'#ff4d6d', reps:1,  sets:3, xp:20},
+    {id:5, name:'プランク（30秒）',        icon:'🧘', color:'#ff4d6d', reps:1,  sets:3, xp:30},
   ],
   records: {},         // { 'YYYY-MM-DD': [{menuId,reps,sets,note,xp}, ...] }
   totalXp: 0,
@@ -816,6 +820,8 @@ async function saveRecord() {
 function closeModal(id, e) {
   if (e && e.target !== e.currentTarget) return;
   document.getElementById(id).classList.remove('open');
+  // タイマー編集モーダルを閉じたら試聴も止める
+  if (id === 'timerEditorModal') stopModalPreview();
 }
 
 // ── XP/レベルアップ演出 ───────────────────────────────────
@@ -1128,8 +1134,11 @@ function toggleBGM() {
   if (bgmState.playing) {
     stopBGM();
   } else {
-    // タイマー動作中ならドロップモードで再開
+    // タイマー動作中ならドロップモードで再開（トラックはすでに解決済み）
     startBGM(timerState.running);
+    const tname = BGM_TRACKS[bgmTrack]?.name || '';
+    const el = document.getElementById('timerName');
+    if (el && tname) el.textContent += `　🎵 ${tname}`;
   }
 }
 
@@ -1384,7 +1393,7 @@ const DG_SYNTH_HITS = [0,0,0,0, 1,0,0,0, 0,0,1,0, 0,1,0,0];
 // ノイズバッファキャッシュ
 let _dgNoise = null;
 function getDgNoise(ctx) {
-  if (!_dgNoise) {
+  if (!_dgNoise || _dgNoise.sampleRate !== ctx.sampleRate) {
     _dgNoise = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
     const d = _dgNoise.getChannelData(0);
     for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
@@ -2010,6 +2019,51 @@ function saveTimers() {
   try { localStorage.setItem('muscleTimers', JSON.stringify(timerState.timers)); } catch(e){}
 }
 
+// ── モーダル内試聴 ───────────────────────────────────────
+let modalPreviewing = false;
+
+function updateModalPreviewBtn() {
+  const btn = document.getElementById('modalPreviewBtn');
+  if (!btn) return;
+  const track = document.getElementById('teBgmTrack')?.value;
+  // ローテーション・ランダムは試聴不可
+  const previewable = track && track !== 'rotation' && track !== 'random';
+  btn.disabled = !previewable;
+  btn.style.opacity = previewable ? '1' : '0.4';
+  if (!previewable && modalPreviewing) stopModalPreview();
+}
+
+function toggleModalPreview() {
+  if (modalPreviewing) {
+    stopModalPreview();
+  } else {
+    startModalPreview();
+  }
+}
+
+function startModalPreview() {
+  const track = document.getElementById('teBgmTrack')?.value;
+  if (!track || track === 'rotation' || track === 'random') return;
+  ensureAudio();
+  stopPreview();   // タイマー一覧の試聴も止める
+  modalPreviewing = true;
+  bgmTrack = track;
+  timerState.running   = false;
+  timerState.remaining = 0;
+  timerState.total     = 60;
+  startBGM(true);
+  const btn = document.getElementById('modalPreviewBtn');
+  if (btn) { btn.textContent = '■ 停止'; btn.classList.add('playing'); }
+}
+
+function stopModalPreview() {
+  if (!modalPreviewing) return;
+  stopBGM();
+  modalPreviewing = false;
+  const btn = document.getElementById('modalPreviewBtn');
+  if (btn) { btn.textContent = '▶ 試聴'; btn.classList.remove('playing'); }
+}
+
 let previewingIdx = -1;
 
 function togglePreview(idx) {
@@ -2107,7 +2161,6 @@ function startTimer(idx) {
   // 3・2・1・GO カウントダウン
   // タイマーのBGM設定に従って自動制御
   const useBGM = t.bgm !== false;
-  bgmTrack = t.bgmTrack || 'eurobeat';
   document.getElementById('bgmBtn').textContent = useBGM ? '🔇 BGM OFF' : '🎵 BGM ON';
   stopBGM();
 
@@ -2130,6 +2183,8 @@ function startTimer(idx) {
       beep(1100, 0, 0.3, 0.5);
       // GO!でドロップ（BGMありタイマーのみ）
       if (useBGM) {
+        // GO!のタイミングでトラックを決定（ランダム/ローテーションはここで解決）
+        bgmTrack = resolveTrack(t.bgmTrack || 'sweat');
         stopBGM();
         setTimeout(() => {
           startBGM(true);
@@ -2262,6 +2317,8 @@ function openTimerEditor(idx) {
     `<div class="emoji-opt${e===selEmoji?' sel':''}" onclick="selTimerEmoji('${e}')">${e}</div>`
   ).join('');
   document.getElementById('timerEditorModal').classList.add('open');
+  stopModalPreview();
+  updateModalPreviewBtn();
 }
 
 function selTimerEmoji(e) {
@@ -2282,6 +2339,7 @@ function saveTimerEditor() {
   };
   if (timerState.editingIdx >= 0) timerState.timers[timerState.editingIdx] = obj;
   else timerState.timers.push(obj);
+  stopModalPreview();
   saveTimers();
   renderTimerTab();
   closeModal('timerEditorModal');
