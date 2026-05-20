@@ -414,9 +414,13 @@ input,select,textarea{font-size:16px !important}
       <label>時間（秒）</label>
       <input type="number" id="teSeconds" placeholder="60" min="5" inputmode="numeric">
     </div>
-    <div class="field" style="margin-bottom:0">
+    <div class="field" style="margin-bottom:12px">
       <label>アイコン</label>
       <div class="emoji-picker" id="timerEmojiPicker"></div>
+    </div>
+    <div class="field" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between">
+      <label style="margin-bottom:0">BGMをデフォルトON</label>
+      <input type="checkbox" id="teBgm" style="width:20px;height:20px;accent-color:var(--accent)">
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('timerEditorModal')">キャンセル</button>
@@ -1270,8 +1274,8 @@ function playLead(ctx, time, freq) {
 
 // ── タイマー機能 ─────────────────────────────────────────
 const DEFAULT_TIMERS = [
-  {id:1, name:'プランク',           icon:'🧘', seconds:30},
-  {id:2, name:'ジャンプダイエット', icon:'🦘', seconds:60},
+  {id:1, name:'プランク',           icon:'🧘', seconds:30, bgm:false},
+  {id:2, name:'ジャンプダイエット', icon:'🦘', seconds:60, bgm:true},
 ];
 
 let timerState = {
@@ -1328,7 +1332,7 @@ function renderTimerTab() {
     return `<div class="preset-card">
       <div class="preset-icon" onclick="startTimer(${i})">${t.icon}</div>
       <div class="preset-info" onclick="startTimer(${i})">
-        <div class="preset-name">${t.name}</div>
+        <div class="preset-name">${t.name} ${t.bgm ? '<span style="font-size:10px;color:var(--accent)">🎵</span>' : ''}</div>
         <div class="preset-time">${label}</div>
       </div>
       <div class="preset-edit-btns">
@@ -1363,13 +1367,18 @@ function startTimer(idx) {
   document.getElementById('timerPauseBtn').textContent = '⏸ 一時停止';
 
   // 3・2・1・GO カウントダウン
+  // タイマーのBGM設定に従って自動制御
+  const useBGM = t.bgm !== false;
+  document.getElementById('bgmBtn').textContent = useBGM ? '🔇 BGM OFF' : '🎵 BGM ON';
+  stopBGM();
+
   let count = 3;
   countdown.textContent = count;
   label.textContent = '準備して！';
 
   beep(880, 0, 0.15);
-  // ビルドアップ：BGMがONなら静かモードで先行スタート
-  if (document.getElementById('bgmBtn').textContent === '🔇 BGM OFF') startBGM(false);
+  // ビルドアップ：BGMありタイマーは静かモードで先行スタート
+  if (useBGM) startBGM(false);
 
   const cdId = setInterval(() => {
     count--;
@@ -1467,15 +1476,21 @@ function togglePause() {
   timerState.paused = !timerState.paused;
   const btn  = document.getElementById('timerPauseBtn');
   const ring = document.getElementById('timerRingCircle');
+
   if (timerState.paused) {
     btn.textContent = '▶ 再開';
-    // リング停止
-    const offset = ring.getAttribute('stroke-dashoffset');
+    // 経過時間から現在のoffset位置を計算（0スタート→553ゴール）
+    const elapsed  = timerState.total - timerState.remaining;
+    const current  = Math.round(elapsed / timerState.total * 553);
     ring.style.transition = 'none';
-    ring.setAttribute('stroke-dashoffset', offset);
+    ring.setAttribute('stroke-dashoffset', String(current));
+    timerState.pausedOffset = current;
   } else {
     btn.textContent = '⏸ 一時停止';
-    // 残り時間でリング再開
+    // 一時停止位置から残り時間かけて553まで進める
+    const from = timerState.pausedOffset ?? 0;
+    ring.style.transition = 'none';
+    ring.setAttribute('stroke-dashoffset', String(from));
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         ring.style.transition = `stroke-dashoffset ${timerState.remaining}s linear`;
@@ -1490,6 +1505,7 @@ function openTimerEditor(idx) {
   const t = idx >= 0 ? timerState.timers[idx] : null;
   document.getElementById('teName').value    = t?.name    ?? '';
   document.getElementById('teSeconds').value = t?.seconds ?? 60;
+  document.getElementById('teBgm').checked   = t?.bgm ?? false;
   document.getElementById('timerEditorTitle').textContent = idx >= 0 ? 'タイマーを編集' : 'タイマーを追加';
   const ep       = document.getElementById('timerEmojiPicker');
   const selEmoji = t?.icon ?? '⏱️';
@@ -1509,9 +1525,10 @@ function saveTimerEditor() {
   if (!name) { alert('名前を入力してください'); return; }
   const seconds = parseInt(document.getElementById('teSeconds').value) || 60;
   const icon    = document.querySelector('#timerEmojiPicker .emoji-opt.sel')?.textContent.trim() ?? '⏱️';
+  const bgm = document.getElementById('teBgm').checked;
   const obj = {
     id:      timerState.editingIdx >= 0 ? timerState.timers[timerState.editingIdx].id : Date.now(),
-    name, icon, seconds
+    name, icon, seconds, bgm
   };
   if (timerState.editingIdx >= 0) timerState.timers[timerState.editingIdx] = obj;
   else timerState.timers.push(obj);
