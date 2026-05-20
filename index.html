@@ -1413,8 +1413,7 @@ function startTimer(idx) {
   label.textContent = '準備して！';
 
   beep(880, 0, 0.15);
-  // ビルドアップ：BGMありタイマーは静かモードで先行スタート
-  if (useBGM) startBGM(false);
+  // カウントダウン中はBGMなし。GO!後にドロップ開始。
 
   const cdId = setInterval(() => {
     count--;
