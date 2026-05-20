@@ -395,9 +395,10 @@ input,select,textarea{font-size:16px !important}
     <div class="timer-time" id="timerTime">--</div>
   </div>
   <div class="timer-name" id="timerName"></div>
-  <div style="display:flex;gap:12px;margin-top:24px">
+  <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;justify-content:center">
     <button class="timer-btn-stop" onclick="stopTimer()">■ 中止</button>
     <button class="timer-btn-pause" id="timerPauseBtn" onclick="togglePause()">⏸ 一時停止</button>
+    <button class="timer-btn-pause" id="bgmBtn" onclick="toggleBGM()" style="color:var(--accent);border-color:var(--accent)">🎵 BGM ON</button>
   </div>
 </div>
 
@@ -1041,6 +1042,173 @@ function resetData() {
   setSyncState('');
 }
 
+// ── BGM生成 ──────────────────────────────────────────────
+let bgmState = { playing: false, nodes: [], nextBeat: 0, scheduleId: null };
+
+const BGM_BPM = 128;
+const BGM_BEAT = 60 / BGM_BPM;
+
+// コード進行 (Am - F - C - G)
+const CHORDS = [
+  [220.0, 261.6, 329.6], // Am
+  [174.6, 220.0, 261.6], // F
+  [130.8, 164.8, 196.0], // C
+  [196.0, 246.9, 293.7], // G
+];
+
+function startBGM() {
+  if (bgmState.playing) return;
+  bgmState.playing = true;
+  bgmState.beat = 0;
+  bgmState.chord = 0;
+  bgmState.nextBeat = getAudioCtx().currentTime + 0.1;
+  scheduleBGM();
+  document.getElementById('bgmBtn').textContent = '🔇 BGM OFF';
+}
+
+function stopBGM() {
+  bgmState.playing = false;
+  clearTimeout(bgmState.scheduleId);
+  bgmState.nodes.forEach(n => { try { n.stop(); } catch(e){} });
+  bgmState.nodes = [];
+  document.getElementById('bgmBtn').textContent = '🎵 BGM ON';
+}
+
+function toggleBGM() {
+  bgmState.playing ? stopBGM() : startBGM();
+}
+
+function scheduleBGM() {
+  if (!bgmState.playing) return;
+  const ctx = getAudioCtx();
+  const LOOKAHEAD = 0.3;
+  const SCHEDULE_INTERVAL = 100;
+
+  while (bgmState.nextBeat < ctx.currentTime + LOOKAHEAD) {
+    playBeat(bgmState.nextBeat, bgmState.beat, bgmState.chord);
+    bgmState.beat++;
+    if (bgmState.beat % 16 === 0) bgmState.chord = (bgmState.chord + 1) % CHORDS.length;
+    bgmState.nextBeat += BGM_BEAT / 2;
+  }
+  bgmState.scheduleId = setTimeout(scheduleBGM, SCHEDULE_INTERVAL);
+}
+
+function makeNode(ctx) {
+  const node = { stop: () => {} };
+  return node;
+}
+
+function playBeat(time, beat, chordIdx) {
+  const ctx = getAudioCtx();
+  const b = beat % 16; // 16分音符単位
+
+  // キック：0, 8拍目
+  if (b === 0 || b === 8) {
+    playKick(ctx, time);
+  }
+  // スネア：4, 12拍目
+  if (b === 4 || b === 12) {
+    playSnare(ctx, time);
+  }
+  // ハイハット：全拍
+  playHihat(ctx, time, b % 2 === 0 ? 0.15 : 0.08);
+
+  // ベースライン：0, 6, 8, 14拍目
+  if (b === 0 || b === 6 || b === 8 || b === 14) {
+    playBass(ctx, time, CHORDS[chordIdx][0]);
+  }
+
+  // シンセコード：0拍目ごとに
+  if (b === 0) {
+    playSynth(ctx, time, CHORDS[chordIdx]);
+  }
+
+  // シンセリード（メロディ）
+  const melodies = [0,null,2,null,1,null,2,null,0,null,null,2,1,null,0,null];
+  const noteIdx = melodies[b];
+  if (noteIdx !== null) {
+    playLead(ctx, time, CHORDS[chordIdx][noteIdx] * 2);
+  }
+}
+
+function playKick(ctx, time) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, time);
+  osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.3);
+  gain.gain.setValueAtTime(1.0, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+  osc.start(time); osc.stop(time + 0.35);
+}
+
+function playSnare(ctx, time) {
+  const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1);
+  const src  = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  const fil  = ctx.createBiquadFilter();
+  src.buffer = buf;
+  fil.type = 'highpass'; fil.frequency.value = 1000;
+  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+  gain.gain.setValueAtTime(0.4, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+  src.start(time); src.stop(time + 0.2);
+}
+
+function playHihat(ctx, time, vol) {
+  const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1);
+  const src  = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  const fil  = ctx.createBiquadFilter();
+  src.buffer = buf;
+  fil.type = 'highpass'; fil.frequency.value = 8000;
+  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+  gain.gain.setValueAtTime(vol, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
+  src.start(time); src.stop(time + 0.06);
+}
+
+function playBass(ctx, time, freq) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sawtooth';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.25, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_BEAT * 0.9);
+  osc.start(time); osc.stop(time + BGM_BEAT);
+}
+
+function playSynth(ctx, time, freqs) {
+  freqs.forEach(freq => {
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'square';
+    osc.frequency.value = freq * 2;
+    gain.gain.setValueAtTime(0.06, time);
+    gain.gain.setValueAtTime(0.04, time + BGM_BEAT * 2);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_BEAT * 7.9);
+    osc.start(time); osc.stop(time + BGM_BEAT * 8);
+  });
+}
+
+function playLead(ctx, time, freq) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sawtooth';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.12, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_BEAT * 0.4);
+  osc.start(time); osc.stop(time + BGM_BEAT * 0.5);
+}
+
 // ── タイマー機能 ─────────────────────────────────────────
 const DEFAULT_TIMERS = [
   {id:1, name:'プランク',           icon:'🧘', seconds:30},
@@ -1223,6 +1391,7 @@ function stopTimer() {
   timerState.intervalId = null;
   timerState.running    = false;
   timerState.paused     = false;
+  stopBGM();
   document.getElementById('timerOverlay').classList.remove('show');
   // 表示リセット
   document.getElementById('timerCountdown').style.display = 'block';
