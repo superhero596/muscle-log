@@ -479,9 +479,11 @@ function getNextTitle(lv) {
 let S = {
   gasUrl: '',
   menus: [
-    {id:1,name:'胸（プッシュアップ）',icon:'💪',color:'#00e5a0',reps:10,sets:3,xp:30},
-    {id:2,name:'腹（クランチ）',      icon:'🤸',color:'#4dabf7',reps:15,sets:3,xp:25},
-    {id:3,name:'腕（パームカール）',  icon:'🦵',color:'#ffa94d',reps:12,sets:3,xp:20}
+    {id:1, name:'プッシュアップ',          icon:'💪', color:'#00e5a0', reps:10, sets:3, xp:3},
+    {id:2, name:'腹（クランチ）',          icon:'🤸', color:'#4dabf7', reps:10, sets:3, xp:2},
+    {id:3, name:'腕（ダンベルカール）3kg', icon:'🏋️', color:'#ffa94d', reps:20, sets:3, xp:1},
+    {id:4, name:'スクワット',              icon:'🦵', color:'#cc5de8', reps:10, sets:3, xp:2},
+    {id:5, name:'プランク（30秒）',        icon:'🧘', color:'#ff4d6d', reps:1,  sets:3, xp:20},
   ],
   records: {},         // { 'YYYY-MM-DD': [{menuId,reps,sets,note,xp}, ...] }
   totalXp: 0,
@@ -519,10 +521,13 @@ function todayKey() {
 function p2(n) { return String(n).padStart(2,'0'); }
 function xpForLevel(lv) { let t=0; for(let i=1;i<lv;i++) t+=i*100; return t; }
 function calcTotalXp() {
+  // 常にmenusのxp単価を参照（recordsのxpフィールドは使わない）
   let total = 0;
   Object.values(S.records).flat().forEach(r => {
-    const mn = S.menus.find(x => x.id == r.menuId);
-    if (mn) total += mn.xp * r.reps * r.sets;
+    const mn   = S.menus.find(x => x.id == r.menuId);
+    const reps = Number(r.reps) || 0;
+    const sets = Number(r.sets) || 0;
+    if (mn && reps > 0 && sets > 0) total += mn.xp * reps * sets;
   });
   return total;
 }
@@ -766,8 +771,8 @@ function openEdit(id) {
 }
 
 async function saveRecord() {
-  const id  = S.activeMenuId;
-  const m   = S.menus.find(x => x.id === id); if (!m) return;
+  const id   = S.activeMenuId;
+  const m    = S.menus.find(x => x.id === id); if (!m) return;
   const reps = parseInt(document.getElementById('inputReps').value) || m.reps;
   const sets = parseInt(document.getElementById('inputSets').value) || m.sets;
   const note = document.getElementById('inputNote').value;
@@ -775,36 +780,34 @@ async function saveRecord() {
 
   const alreadyDone = !!S.todayDone[id];
 
-  // 常に上書き（1メニュー1日1記録）
-  S.todayDone[id] = {menuId: id, reps, sets, note, xp: m.xp};
+  // 上書き保存（xpフィールドは持たない。XPはmenusから都度計算）
+  const rec = {menuId: id, reps, sets, note};
+  S.todayDone[id] = rec;
   if (!S.records[tk]) S.records[tk] = [];
   const idx = S.records[tk].findIndex(r => r.menuId == id);
-  if (idx >= 0) S.records[tk][idx] = {menuId:id,reps,sets,note,xp:m.xp};
-  else S.records[tk].push({menuId:id,reps,sets,note,xp:m.xp});
+  if (idx >= 0) S.records[tk][idx] = {...rec};
+  else S.records[tk].push({...rec});
 
-  // XP = 今日完了したメニューのXP合計（重複なし）
-  const todayXp = Object.keys(S.todayDone).reduce((a, mid) => {
-    const menu = S.menus.find(x => x.id == mid);
-    return a + (menu ? menu.xp : 0);
-  }, 0);
-  // 過去分XP + 今日分XP で再計算
-  const pastXp = Object.entries(S.records)
-    .filter(([k]) => k !== tk)
-    .flatMap(([, recs]) => recs)
-    .reduce((a, r) => a + Number(r.xp), 0);
+  // XP・レベルをrecords全件から一貫して再計算
   const wasLv = S.level;
-  S.totalXp = pastXp + todayXp;
+  S.totalXp = calcTotalXp();
   recalcLevel();
   saveLocal();
   closeModal('inputModalBg');
   renderHome();
   updateHeader();
   if (!alreadyDone) {
-    showXpPopup(m.xp);
+    showXpPopup(m.xp * reps);
     if (S.level > wasLv) setTimeout(() => showLevelUp(S.level), 800);
+  } else {
+    // 既存記録の更新（セット数や回数が変わった場合のみポップアップ）
+    const prev = S.records[tk].find(r => r.menuId == id);
+    if (prev && (prev.reps !== reps || prev.sets !== sets)) {
+      showXpPopup(m.xp * reps);
+    }
   }
 
-  // GASに非同期でプッシュ
+  // GASに非同期でプッシュ（xpフィールドなし）
   setSyncState('ing');
   pushRecord(tk, id, reps, sets, note, m.xp);
 }
