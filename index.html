@@ -1651,9 +1651,28 @@ let timerState = {
 // AudioContextは1つだけ作る
 let _audioCtx = null;
 function getAudioCtx() {
-  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // suspended状態ならresumeしてから返す（iOS Safari対策）
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
   return _audioCtx;
+}
+
+// ユーザー操作時にAudioContextを確実に起動する
+function ensureAudio() {
+  const ctx = getAudioCtx();
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+  // iOSでは一度でも音を鳴らしておくと以降安定する
+  const buf  = ctx.createBuffer(1, 1, ctx.sampleRate);
+  const src  = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start(0);
 }
 
 function beep(freq, startOffset, duration, vol=0.35) {
@@ -1686,6 +1705,7 @@ function saveTimers() {
 let previewingIdx = -1;
 
 function togglePreview(idx) {
+  ensureAudio();  // iOS Safari対策：タップ時にAudioContextを確実に起動
   // 別のタイマーを試聴中なら止める
   if (previewingIdx >= 0 && previewingIdx !== idx) {
     stopPreview();
@@ -1749,6 +1769,7 @@ function renderTimerTab() {
 }
 
 function startTimer(idx) {
+  ensureAudio();  // iOS Safari対策
   // 多重起動防止
   if (timerState.running) stopTimer();
   stopPreview();
