@@ -1161,6 +1161,21 @@ function stopBGM() {
   clearTimeout(bgmState.scheduleId);
   bgmState.scheduleId = null;
   document.getElementById('bgmBtn').textContent = '🎵 BGM ON';
+  // 急停止のノイズ防止：masterGainを素早くフェードアウト
+  try {
+    const ctx = getAudioCtx();
+    const t = ctx.currentTime;
+    [_dgFxMap, _wgFxMap, _lbFxMap].forEach(map => {
+      try {
+        const fx = map.get(ctx);
+        if (fx?.input) {
+          fx.input.gain.setValueAtTime(fx.input.gain.value, t);
+          fx.input.gain.linearRampToValueAtTime(0, t + 0.05);
+          setTimeout(() => { try { fx.input.gain.value = 1; } catch(e){} }, 150);
+        }
+      } catch(e){}
+    });
+  } catch(e){}
 }
 
 function getCurrentStep() {
@@ -2051,12 +2066,6 @@ function ensureAudio() {
   if (ctx.state === 'suspended') {
     ctx.resume().catch(() => {});
   }
-  // iOSでは一度でも音を鳴らしておくと以降安定する
-  const buf  = ctx.createBuffer(1, 1, ctx.sampleRate);
-  const src  = ctx.createBufferSource();
-  src.buffer = getSharedNoise(ctx);
-  src.connect(ctx.destination);
-  src.start(0);
 }
 
 function beep(freq, startOffset, duration, vol=0.35) {
