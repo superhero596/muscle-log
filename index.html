@@ -1163,6 +1163,16 @@ function stopBGM() {
   document.getElementById('bgmBtn').textContent = '🎵 BGM ON';
 }
 
+function getCurrentStep() {
+  switch(bgmTrack) {
+    case 'deepgravity': return DG_STEP;
+    case 'wargod':      return WG_STEP;
+    case 'limitbreak':  return LB_STEP;
+    case 'muscle':      return (60/138)/4;
+    default:            return BGM_STEP; // sweat: 147BPM
+  }
+}
+
 function scheduleBGM() {
   if (!bgmState.playing) return;
   const ctx       = getAudioCtx();
@@ -1172,7 +1182,8 @@ function scheduleBGM() {
     const step      = bgmState.beat % 64;
     const chordIdx  = Math.floor(step / 16) % CHORDS.length;
     // 経過秒数（BGM開始からの時間）
-    const elapsed   = bgmState.beat * BGM_STEP;
+    const stepSize  = getCurrentStep();
+    const elapsed   = bgmState.beat * stepSize;
 
     if (bgmTrack === 'muscle') {
       playStepMuscle(bgmState.nextBeat, step, chordIdx, elapsed);
@@ -1187,7 +1198,7 @@ function scheduleBGM() {
     }
 
     bgmState.beat++;
-    bgmState.nextBeat += BGM_STEP;
+    bgmState.nextBeat += stepSize;
   }
   bgmState.scheduleId = setTimeout(scheduleBGM, 80);
 }
