@@ -1116,10 +1116,12 @@ function scheduleBGM() {
   const LOOKAHEAD = 0.25;
 
   while (bgmState.nextBeat < ctx.currentTime + LOOKAHEAD) {
-    const step = bgmState.beat % 64;   // 64ステップ（16分×16拍×4コード）
-    const chordIdx = Math.floor(step / 16) % CHORDS.length;
+    const step      = bgmState.beat % 64;
+    const chordIdx  = Math.floor(step / 16) % CHORDS.length;
+    // 経過秒数（BGM開始からの時間）
+    const elapsed   = bgmState.beat * BGM_STEP;
 
-    playStep(bgmState.nextBeat, step, chordIdx, bgmState.dropped);
+    playStep(bgmState.nextBeat, step, chordIdx, elapsed);
 
     bgmState.beat++;
     bgmState.nextBeat += BGM_STEP;
@@ -1127,48 +1129,77 @@ function scheduleBGM() {
   bgmState.scheduleId = setTimeout(scheduleBGM, 80);
 }
 
-function playStep(time, step, chordIdx, dropped) {
-  const ctx = getAudioCtx();
-  const b16 = step % 16;   // 16分音符内の位置（0〜15）
-  const b4  = b16 % 4;     // 4分音符内の位置
+function playStep(time, step, chordIdx, elapsed) {
+  const ctx  = getAudioCtx();
+  const b16  = step % 16;
+  const root = CHORDS[chordIdx][0];
 
-  // ── リズム ──────────────────────────────────────────
-  if (dropped) {
-    // キック：4つ打ち（0,4,8,12）
-    if (b16 % 4 === 0) playKick(ctx, time);
+  // ── タイムライン判定 ─────────────────────────────────
+  // elapsed は BGM開始からの秒数
+  // timerState.total を使ってスケール（60秒想定だが任意の秒数でも動く）
+  const total    = timerState.total || 60;
+  const tRemain  = timerState.remaining || 0;
+  // タイマーが動いていない場合は elapsed そのまま使用
+  const sec = timerState.running ? (total - tRemain) : elapsed;
 
-    // スネア＋クラップ：4, 12
-    if (b16 === 4 || b16 === 12) {
-      playSnare(ctx, time);
-      playClap(ctx, time);
-    }
+  const isIntro      = sec < 5;                        // 0〜5秒
+  const isAB         = sec >= 5  && sec < 20;          // 5〜20秒
+  const isChorus     = sec >= 20 && sec < 45;          // 20〜45秒
+  const isLastSprint = sec >= 45 && sec < (total - 5); // 45〜55秒
+  const isFinish     = sec >= (total - 5);             // 残り5秒
 
-    // ハイハット：裏打ち強調（ダッカダッカ）
-    // 表：軽く、裏（2,6,10,14）：強く
-    if (b16 % 2 === 0) playHihat(ctx, time, 0.08, false);
-    else               playHihat(ctx, time, 0.28, true);  // 裏強め
-
-    // オクターブベース
-    const rootFreq = CHORDS[chordIdx][0];
-    if (b16 === 0 || b16 === 2)  playBass(ctx, time, rootFreq * 0.5, 0.38); // 低オクターブ
-    if (b16 === 4 || b16 === 6)  playBass(ctx, time, rootFreq,       0.28); // 高オクターブ
-    if (b16 === 8 || b16 === 10) playBass(ctx, time, rootFreq * 0.5, 0.38);
-    if (b16 === 12|| b16 === 14) playBass(ctx, time, rootFreq,       0.28);
-
-  } else {
-    // ドロップ前：静かなビルドアップ（ハイハット＋シンセのみ）
-    if (b16 % 2 === 1) playHihat(ctx, time, 0.12, false);
+  // ── 【イントロ】ハイハット＋シンセのみ ────────────────
+  if (isIntro) {
+    if (b16 % 4 === 2) playHihat(ctx, time, 0.15, true);
+    if (b16 === 0) playSynth(ctx, time, CHORDS[chordIdx], 0.10);
+    return;
   }
 
-  // ── ハーモニー ───────────────────────────────────────
-  // コード切り替えタイミング（各コード16ステップ）
-  if (b16 === 0) playSynth(ctx, time, CHORDS[chordIdx], dropped ? 0.07 : 0.12);
+  // ── 【フィニッシュ】ドラムロール ──────────────────────
+  if (isFinish) {
+    // 8分音符でスネアロール
+    if (b16 % 2 === 0) playSnare(ctx, time);
+    // ハイハット高速
+    playHihat(ctx, time, 0.2, false);
+    return;
+  }
 
-  // ── リードメロディ ────────────────────────────────────
-  const melIdx = MELODY[step % MELODY.length];
-  if (melIdx !== null) {
-    const freq = CHORDS[chordIdx][melIdx];
-    playLead(ctx, time, freq * (dropped ? 2 : 1));
+  // ── 共通：ハイハット ──────────────────────────────────
+  if (isLastSprint) {
+    // ラストスパート：16分全部刻む
+    playHihat(ctx, time, b16 % 2 === 0 ? 0.08 : 0.30, b16 % 2 === 1);
+  } else {
+    // 通常：裏打ち
+    if (b16 % 2 === 0) playHihat(ctx, time, 0.07, false);
+    else               playHihat(ctx, time, 0.25, true);
+  }
+
+  // ── キック：4つ打ち ───────────────────────────────────
+  if (b16 % 4 === 0) playKick(ctx, time);
+
+  // ── スネア＋クラップ ──────────────────────────────────
+  if (b16 === 4 || b16 === 12) {
+    playSnare(ctx, time);
+    playClap(ctx, time);
+  }
+
+  // ── オクターブベース ──────────────────────────────────
+  if (b16 === 0 || b16 === 2)  playBass(ctx, time, root * 0.5, 0.40);
+  if (b16 === 4 || b16 === 6)  playBass(ctx, time, root,       0.28);
+  if (b16 === 8 || b16 === 10) playBass(ctx, time, root * 0.5, 0.40);
+  if (b16 === 12|| b16 === 14) playBass(ctx, time, root,       0.28);
+
+  // ── シンセコード ──────────────────────────────────────
+  if (b16 === 0) playSynth(ctx, time, CHORDS[chordIdx], 0.07);
+
+  // ── リードメロディ（サビ以降のみ）────────────────────
+  if (isChorus || isLastSprint) {
+    const melIdx = MELODY[step % MELODY.length];
+    if (melIdx !== null) {
+      // ラストスパートは1オクターブ上
+      const octave = isLastSprint ? 4 : 2;
+      playLead(ctx, time, CHORDS[chordIdx][melIdx] * octave);
+    }
   }
 }
 
