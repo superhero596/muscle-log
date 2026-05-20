@@ -167,6 +167,46 @@ input,select,textarea{font-size:16px !important}
 .color-opt{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent}
 .color-opt.sel{border-color:var(--text)}
 
+/* ── TIMER ── */
+.timer-overlay{
+  display:none;position:fixed;inset:0;background:#0d0f14;z-index:500;
+  flex-direction:column;align-items:center;justify-content:center;
+}
+.timer-overlay.show{display:flex}
+.timer-countdown{
+  font-family:'Rajdhani',sans-serif;font-size:120px;font-weight:700;
+  color:var(--accent);line-height:1;animation:pulse 0.5s ease infinite alternate
+}
+.timer-ring-wrap{position:relative;width:200px;height:200px;margin:8px 0}
+.timer-ring{width:200px;height:200px}
+.timer-time{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-family:'Rajdhani',sans-serif;font-size:56px;font-weight:700;color:var(--text)
+}
+.timer-label{font-size:18px;color:var(--text2);margin-bottom:4px;font-weight:500}
+.timer-name{font-size:14px;color:var(--text3);margin-top:4px}
+.timer-btn-stop{
+  background:rgba(255,77,109,0.15);border:1px solid var(--red);
+  border-radius:10px;padding:12px 24px;color:var(--red);
+  font-size:15px;cursor:pointer;font-family:'Noto Sans JP',sans-serif
+}
+.timer-btn-pause{
+  background:var(--bg4);border:1px solid var(--border2);
+  border-radius:10px;padding:12px 24px;color:var(--text2);
+  font-size:15px;cursor:pointer;font-family:'Noto Sans JP',sans-serif
+}
+.preset-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;cursor:pointer;
+  transition:border-color 0.2s
+}
+.preset-card:active{border-color:var(--accent)}
+.preset-icon{font-size:32px}
+.preset-info{flex:1}
+.preset-name{font-size:15px;font-weight:500}
+.preset-time{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--accent)}
+.preset-edit-btns{display:flex;gap:6px}
+
 /* ── LOADING ── */
 .loading-overlay{display:none;position:fixed;inset:0;background:rgba(13,15,20,0.85);z-index:400;align-items:center;justify-content:center;flex-direction:column;gap:12px}
 .confetti-piece{position:fixed;width:8px;height:8px;border-radius:2px;opacity:0;pointer-events:none;z-index:350;animation:confetti-fall 2.5s ease-in forwards}
@@ -203,6 +243,7 @@ input,select,textarea{font-size:16px !important}
   <button class="tab-btn active" onclick="showTab('home')" id="tab-home"><span class="tab-icon">🏠</span>今日</button>
   <button class="tab-btn" onclick="showTab('history')" id="tab-history"><span class="tab-icon">📅</span>履歴</button>
   <button class="tab-btn" onclick="showTab('stats')" id="tab-stats"><span class="tab-icon">📊</span>統計</button>
+  <button class="tab-btn" onclick="showTab('timer')" id="tab-timer"><span class="tab-icon">⏱️</span>タイマー</button>
   <button class="tab-btn" onclick="showTab('settings')" id="tab-settings"><span class="tab-icon">⚙️</span>設定</button>
 </div>
 
@@ -245,6 +286,15 @@ input,select,textarea{font-size:16px !important}
   <div class="chart-wrap">
     <div class="chart-title">過去3ヶ月のトレーニング</div>
     <div class="heatmap-grid" id="heatmap"></div>
+  </div>
+</div>
+
+<!-- TIMER -->
+<div class="screen" id="screen-timer">
+  <div id="timerPreset" style="margin-bottom:16px">
+    <div class="section-label">タイマー選択</div>
+    <div id="presetList"></div>
+    <button class="add-btn" onclick="openTimerEditor(-1)" style="margin-top:8px">＋ タイマーを追加</button>
   </div>
 </div>
 
@@ -329,6 +379,49 @@ input,select,textarea{font-size:16px !important}
   <div class="levelup-num" id="levelupNum">2</div>
   <div class="levelup-sub" id="levelupSub">新しいレベルに到達しました</div>
   <button class="levelup-btn" onclick="closeLevelUp()">やったぜ！</button>
+</div>
+
+<!-- Timer Overlay -->
+<div class="timer-overlay" id="timerOverlay">
+  <div class="timer-countdown" id="timerCountdown">3</div>
+  <div class="timer-label" id="timerLabel">準備して！</div>
+  <div class="timer-ring-wrap">
+    <svg class="timer-ring" viewBox="0 0 200 200">
+      <circle cx="100" cy="100" r="88" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
+      <circle id="timerRingCircle" cx="100" cy="100" r="88" fill="none" stroke="#00e5a0" stroke-width="8"
+        stroke-dasharray="553" stroke-dashoffset="0" stroke-linecap="round"
+        transform="rotate(-90 100 100)" style="transition:stroke-dashoffset 1s linear"/>
+    </svg>
+    <div class="timer-time" id="timerTime">--</div>
+  </div>
+  <div class="timer-name" id="timerName"></div>
+  <div style="display:flex;gap:12px;margin-top:24px">
+    <button class="timer-btn-stop" onclick="stopTimer()">■ 中止</button>
+    <button class="timer-btn-pause" id="timerPauseBtn" onclick="togglePause()">⏸ 一時停止</button>
+  </div>
+</div>
+
+<!-- Timer Editor Modal -->
+<div class="modal-bg" id="timerEditorModal" onclick="closeModal('timerEditorModal',event)">
+  <div class="modal-inner">
+    <div class="modal-title" id="timerEditorTitle">タイマーを追加</div>
+    <div class="field" style="margin-bottom:12px">
+      <label>タイマー名</label>
+      <input type="text" id="teName" placeholder="例：プランク">
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>時間（秒）</label>
+      <input type="number" id="teSeconds" placeholder="60" min="5" inputmode="numeric">
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>アイコン</label>
+      <div class="emoji-picker" id="timerEmojiPicker"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('timerEditorModal')">キャンセル</button>
+      <button class="btn-save" onclick="saveTimerEditor()">保存</button>
+    </div>
+  </div>
 </div>
 
 <!-- Loading -->
@@ -524,6 +617,7 @@ function showTab(name) {
   if (name==='history')  renderCalendar();
   if (name==='stats')    renderStats();
   if (name==='settings') renderSettings();
+  if (name==='timer')    renderTimerTab();
 }
 
 // ── HOME ──────────────────────────────────────────────────
@@ -947,6 +1041,258 @@ function resetData() {
   setSyncState('');
 }
 
+// ── タイマー機能 ─────────────────────────────────────────
+const DEFAULT_TIMERS = [
+  {id:1, name:'プランク',           icon:'🧘', seconds:30},
+  {id:2, name:'ジャンプダイエット', icon:'🦘', seconds:60},
+];
+
+let timerState = {
+  timers: [...DEFAULT_TIMERS],
+  intervalId: null,
+  remaining: 0,
+  total: 0,
+  paused: false,
+  editingIdx: -1,
+  running: false,
+};
+
+// AudioContextは1つだけ作る
+let _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+function beep(freq, startOffset, duration, vol=0.35) {
+  try {
+    const ctx = getAudioCtx();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const t0 = ctx.currentTime + startOffset;
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.05);
+  } catch(e) { console.warn('beep error', e); }
+}
+
+function loadTimers() {
+  try {
+    const d = JSON.parse(localStorage.getItem('muscleTimers')||'null');
+    if (d) timerState.timers = d;
+  } catch(e){}
+}
+function saveTimers() {
+  try { localStorage.setItem('muscleTimers', JSON.stringify(timerState.timers)); } catch(e){}
+}
+
+function renderTimerTab() {
+  const list = document.getElementById('presetList');
+  list.innerHTML = timerState.timers.map((t,i) => {
+    const m = Math.floor(t.seconds/60);
+    const s = t.seconds % 60;
+    const label = m > 0 ? `${m}分${s > 0 ? s+'秒' : ''}` : `${s}秒`;
+    return `<div class="preset-card">
+      <div class="preset-icon" onclick="startTimer(${i})">${t.icon}</div>
+      <div class="preset-info" onclick="startTimer(${i})">
+        <div class="preset-name">${t.name}</div>
+        <div class="preset-time">${label}</div>
+      </div>
+      <div class="preset-edit-btns">
+        <button class="btn-edit" onclick="openTimerEditor(${i});event.stopPropagation()">編集</button>
+        <button class="btn-delete" onclick="deleteTimer(${i});event.stopPropagation()">削除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function startTimer(idx) {
+  // 多重起動防止
+  if (timerState.running) stopTimer();
+
+  const t = timerState.timers[idx];
+  timerState.total     = t.seconds;
+  timerState.remaining = t.seconds;
+  timerState.paused    = false;
+  timerState.running   = true;
+
+  const overlay    = document.getElementById('timerOverlay');
+  const countdown  = document.getElementById('timerCountdown');
+  const label      = document.getElementById('timerLabel');
+  const ringWrap   = document.querySelector('.timer-ring-wrap');
+  const ring       = document.getElementById('timerRingCircle');
+
+  overlay.classList.add('show');
+  countdown.style.display = 'block';
+  ringWrap.style.display  = 'none';
+  countdown.style.color   = 'var(--accent)';
+  document.getElementById('timerName').textContent = `${t.icon} ${t.name}`;
+  document.getElementById('timerPauseBtn').textContent = '⏸ 一時停止';
+
+  // 3・2・1・GO カウントダウン
+  let count = 3;
+  countdown.textContent = count;
+  label.textContent = '準備して！';
+
+  beep(880, 0, 0.15);
+
+  const cdId = setInterval(() => {
+    count--;
+    if (count > 0) {
+      countdown.textContent = count;
+      beep(880, 0, 0.15);
+    } else {
+      clearInterval(cdId);
+      countdown.textContent = 'GO!';
+      label.textContent = t.name;
+      beep(1100, 0, 0.3, 0.5);
+
+      setTimeout(() => {
+        if (!timerState.running) return;
+        countdown.style.display = 'none';
+        ringWrap.style.display  = 'block';
+        updateTimerDisplay();
+
+        // リングアニメーション開始
+        ring.style.transition = 'none';
+        ring.setAttribute('stroke-dashoffset', '0');
+        ring.setAttribute('stroke', '#00e5a0');
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            ring.style.transition = `stroke-dashoffset ${t.seconds}s linear`;
+            ring.setAttribute('stroke-dashoffset', '553');
+          });
+        });
+
+        // setIntervalは1つだけ
+        clearInterval(timerState.intervalId);
+        timerState.intervalId = setInterval(() => {
+          if (!timerState.paused) {
+            timerState.remaining--;
+            updateTimerDisplay();
+            if (timerState.remaining <= 0) {
+              clearInterval(timerState.intervalId);
+              timerState.intervalId = null;
+              finishTimer();
+            }
+          }
+        }, 1000);
+      }, 700);
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const r = timerState.remaining;
+  const m = Math.floor(r / 60);
+  const s = r % 60;
+  document.getElementById('timerTime').textContent =
+    m > 0 ? `${m}:${String(s).padStart(2,'0')}` : `${s}`;
+  const color = r <= 10 ? '#ff4d6d' : '#00e5a0';
+  document.getElementById('timerRingCircle').setAttribute('stroke', color);
+  document.getElementById('timerTime').style.color = r <= 10 ? 'var(--red)' : 'var(--text)';
+}
+
+function finishTimer() {
+  timerState.running = false;
+  // 完了音：ドミソド
+  beep(523,  0,    0.25);
+  beep(659,  0.28, 0.25);
+  beep(784,  0.56, 0.25);
+  beep(1047, 0.84, 0.5);
+
+  const countdown = document.getElementById('timerCountdown');
+  const ringWrap  = document.querySelector('.timer-ring-wrap');
+  countdown.style.display = 'block';
+  countdown.textContent   = '✓';
+  countdown.style.color   = 'var(--accent)';
+  ringWrap.style.display  = 'none';
+  document.getElementById('timerLabel').textContent = '完了！おつかれさまでした！';
+
+  setTimeout(() => stopTimer(), 2500);
+}
+
+function stopTimer() {
+  clearInterval(timerState.intervalId);
+  timerState.intervalId = null;
+  timerState.running    = false;
+  timerState.paused     = false;
+  document.getElementById('timerOverlay').classList.remove('show');
+  // 表示リセット
+  document.getElementById('timerCountdown').style.display = 'block';
+  document.querySelector('.timer-ring-wrap').style.display = 'none';
+}
+
+function togglePause() {
+  timerState.paused = !timerState.paused;
+  const btn  = document.getElementById('timerPauseBtn');
+  const ring = document.getElementById('timerRingCircle');
+  if (timerState.paused) {
+    btn.textContent = '▶ 再開';
+    // リング停止
+    const offset = ring.getAttribute('stroke-dashoffset');
+    ring.style.transition = 'none';
+    ring.setAttribute('stroke-dashoffset', offset);
+  } else {
+    btn.textContent = '⏸ 一時停止';
+    // 残り時間でリング再開
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ring.style.transition = `stroke-dashoffset ${timerState.remaining}s linear`;
+        ring.setAttribute('stroke-dashoffset', '553');
+      });
+    });
+  }
+}
+
+function openTimerEditor(idx) {
+  timerState.editingIdx = idx;
+  const t = idx >= 0 ? timerState.timers[idx] : null;
+  document.getElementById('teName').value    = t?.name    ?? '';
+  document.getElementById('teSeconds').value = t?.seconds ?? 60;
+  document.getElementById('timerEditorTitle').textContent = idx >= 0 ? 'タイマーを編集' : 'タイマーを追加';
+  const ep       = document.getElementById('timerEmojiPicker');
+  const selEmoji = t?.icon ?? '⏱️';
+  ep.innerHTML   = ['⏱️','🧘','🦘','💪','🔥','⚡','🏃','🤸','🧗','🥊'].map(e =>
+    `<div class="emoji-opt${e===selEmoji?' sel':''}" onclick="selTimerEmoji('${e}')">${e}</div>`
+  ).join('');
+  document.getElementById('timerEditorModal').classList.add('open');
+}
+
+function selTimerEmoji(e) {
+  document.querySelectorAll('#timerEmojiPicker .emoji-opt')
+    .forEach(el => el.classList.toggle('sel', el.textContent.trim() === e));
+}
+
+function saveTimerEditor() {
+  const name = document.getElementById('teName').value.trim();
+  if (!name) { alert('名前を入力してください'); return; }
+  const seconds = parseInt(document.getElementById('teSeconds').value) || 60;
+  const icon    = document.querySelector('#timerEmojiPicker .emoji-opt.sel')?.textContent.trim() ?? '⏱️';
+  const obj = {
+    id:      timerState.editingIdx >= 0 ? timerState.timers[timerState.editingIdx].id : Date.now(),
+    name, icon, seconds
+  };
+  if (timerState.editingIdx >= 0) timerState.timers[timerState.editingIdx] = obj;
+  else timerState.timers.push(obj);
+  saveTimers();
+  renderTimerTab();
+  closeModal('timerEditorModal');
+}
+
+function deleteTimer(i) {
+  if (!confirm('このタイマーを削除しますか？')) return;
+  timerState.timers.splice(i, 1);
+  saveTimers();
+  renderTimerTab();
+}
+
 // ── ServiceWorker登録 ────────────────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').then(reg => {
@@ -967,6 +1313,7 @@ if ('serviceWorker' in navigator) {
 
 // ── 初期化 ───────────────────────────────────────────────
 loadLocal();
+loadTimers();
 // 起動時に必ずXP・レベルをrecordsから再計算（localStorageの古い値を上書き）
 S.totalXp = calcTotalXp();
 recalcLevel();
