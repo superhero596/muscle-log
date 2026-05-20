@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="筋トレ帳">
@@ -1291,7 +1291,15 @@ function playKick(ctx, time) {
 }
 
 function playSnare(ctx, time) {
-  }
+  const buf  = getSharedNoise(ctx, 0.18);
+  const src  = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  const fil  = ctx.createBiquadFilter();
+  src.buffer = buf; fil.type='bandpass'; fil.frequency.value=900; fil.Q.value=1.2;
+  gain.gain.setValueAtTime(0.5, time); gain.gain.exponentialRampToValueAtTime(0.001, time+0.18);
+  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+  src.start(time); src.stop(time+0.18);
+}
 
 function playHihat(ctx, time, vol, open) {
   const dur  = open ? 0.08 : 0.03;
@@ -1306,6 +1314,17 @@ function playHihat(ctx, time, vol, open) {
   src.start(time); src.stop(time + dur + 0.01);
 }
 
+function playClap(ctx, time) {
+  for(let i=0;i<3;i++){
+    const buf=getSharedNoise(ctx,0.05);
+    const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+    src.buffer=buf; fil.type='bandpass'; fil.frequency.value=1200-(i*80); fil.Q.value=1.0;
+    src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+    const t=time+i*0.008;
+    gain.gain.setValueAtTime(0.3,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+    src.start(t); src.stop(t+0.06);
+  }
+}
 function playBass(ctx, time, freq, vol) {
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -1568,7 +1587,7 @@ function dgRiser(ctx, dest, time, progress) {
     return;
   }
   if (b16 % 4 === 0) mDistKick(ctx, time);
-  if (b16 === 4 || b16 === 12) mClap(ctx, time);
+  if (b16 === 4 || b16 === 12) { mSnare(ctx, time); mClap(ctx, time); }
   if (b16 % 4 === 2) mHihat(ctx, time, 0.28, true);
   else if (isLastSprint && b16 % 2 === 0) mHihat(ctx, time, 0.15, false);
   if (b16 % 4 === 0 || b16 % 4 === 2) mBass(ctx, time, root*0.5, BGM_STEP_M);
@@ -1609,6 +1628,25 @@ function mHihat(ctx, time, vol, open) {
   src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
   gain.gain.setValueAtTime(vol,time); gain.gain.exponentialRampToValueAtTime(0.001,time+dur);
   src.start(time); src.stop(time+dur+0.01);
+}
+function mSnare(ctx, time) {
+  const buf=getSharedNoise(ctx,0.15);
+  const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+  src.buffer=buf; fil.type='bandpass'; fil.frequency.value=900; fil.Q.value=1.2;
+  gain.gain.setValueAtTime(0.5,time); gain.gain.exponentialRampToValueAtTime(0.001,time+0.15);
+  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+  src.start(time); src.stop(time+0.15);
+}
+function mClap(ctx, time) {
+  for(let i=0;i<3;i++){
+    const buf=getSharedNoise(ctx,0.05);
+    const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+    src.buffer=buf; fil.type='bandpass'; fil.frequency.value=1200-(i*80); fil.Q.value=1.0;
+    src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+    const t=time+i*0.008;
+    gain.gain.setValueAtTime(0.3,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+    src.start(t); src.stop(t+0.06);
+  }
 }
 function mBass(ctx, time, freq, step) {
   const osc=ctx.createOscillator(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
