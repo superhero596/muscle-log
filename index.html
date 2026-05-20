@@ -1374,9 +1374,9 @@ const DG_SYNTH_HITS = [0,0,0,0, 1,0,0,0, 0,0,1,0, 0,1,0,0];
 
 
 // マスターチェーン（コンプ+サチュレーション）
-let _dgFx = null;
+const _dgFxMap = new WeakMap();
 function getDgFx(ctx) {
-  if (!_dgFx) {
+  if (!_dgFxMap.has(ctx)) {
     const master = ctx.createGain();
     const comp   = ctx.createDynamicsCompressor();
     comp.threshold.value = -18;
@@ -1387,9 +1387,9 @@ function getDgFx(ctx) {
     master.gain.value    = 0.78;
     master.connect(comp);
     comp.connect(ctx.destination);
-    _dgFx = { input: master };
+    _dgFxMap.set(ctx, { input: master });
   }
-  return _dgFx;
+  return _dgFxMap.get(ctx);
 }
 
 function playStepDeepGravity(time, step, chordIdx, elapsed) {
@@ -1675,9 +1675,9 @@ const WG_SNARE   = [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,1];
 const WG_HAT     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1];
 
 // マスターチェーン
-let _wgFx = null;
+const _wgFxMap = new WeakMap();
 function getWgFx(ctx) {
-  if (!_wgFx) {
+  if (!_wgFxMap.has(ctx)) {
     const master = ctx.createGain();
     const comp   = ctx.createDynamicsCompressor();
     const lp     = ctx.createBiquadFilter();
@@ -1686,9 +1686,9 @@ function getWgFx(ctx) {
     comp.attack.value=0.002; comp.release.value=0.22;
     master.gain.value=0.9;
     master.connect(comp); comp.connect(lp); lp.connect(ctx.destination);
-    _wgFx = {input:master, lowpass:lp};
+    _wgFxMap.set(ctx, {input:master, lowpass:lp});
   }
-  return _wgFx;
+  return _wgFxMap.get(ctx);
 }
 
 function playStepWarGod(time, step, elapsed) {
@@ -1856,9 +1856,9 @@ const LB_BASS_P  = [1,0,0,1,0,1,0,1,1,0,1,0,1,0,1,1];
 }
 
 // マスターチェーン（コンプ+ローパス）
-let _lbFx = null;
+const _lbFxMap = new WeakMap();
 function getLbFx(ctx) {
-  if(!_lbFx) {
+  if (!_lbFxMap.has(ctx)) {
     const master = ctx.createGain();
     const comp   = ctx.createDynamicsCompressor();
     const lp     = ctx.createBiquadFilter();
@@ -1867,9 +1867,9 @@ function getLbFx(ctx) {
     comp.attack.value=0.003; comp.release.value=0.25;
     master.gain.value=0.85;
     master.connect(comp); comp.connect(lp); lp.connect(ctx.destination);
-    _lbFx = {input:master, lowpass:lp};
+    _lbFxMap.set(ctx, {input:master, lowpass:lp});
   }
-  return _lbFx;
+  return _lbFxMap.get(ctx);
 }
 
 function playStepLimitBreak(time, step, chordIdx, elapsed) {
