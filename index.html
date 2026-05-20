@@ -1045,15 +1045,15 @@ function resetData() {
 // ── BGM生成 ──────────────────────────────────────────────
 let bgmState = { playing: false, nodes: [], nextBeat: 0, scheduleId: null };
 
-const BGM_BPM = 128;
+const BGM_BPM = 175;  // ノリノリEDM
 const BGM_BEAT = 60 / BGM_BPM;
 
-// コード進行 (Am - F - C - G)
+// コード進行 (Am - F - C - G) 高め
 const CHORDS = [
-  [220.0, 261.6, 329.6], // Am
-  [174.6, 220.0, 261.6], // F
-  [130.8, 164.8, 196.0], // C
-  [196.0, 246.9, 293.7], // G
+  [440.0, 523.3, 659.3], // Am
+  [349.2, 440.0, 523.3], // F
+  [261.6, 329.6, 392.0], // C
+  [392.0, 493.9, 587.3], // G
 ];
 
 function startBGM() {
@@ -1100,47 +1100,63 @@ function makeNode(ctx) {
 
 function playBeat(time, beat, chordIdx) {
   const ctx = getAudioCtx();
-  const b = beat % 16; // 16分音符単位
+  const b = beat % 16;
 
-  // キック：0, 8拍目
-  if (b === 0 || b === 8) {
-    playKick(ctx, time);
-  }
+  // キック：4つ打ち（全拍）＋アクセント
+  if (b % 4 === 0) playKick(ctx, time, b === 0 ? 1.2 : 1.0);
+
   // スネア：4, 12拍目
-  if (b === 4 || b === 12) {
-    playSnare(ctx, time);
-  }
-  // ハイハット：全拍
-  playHihat(ctx, time, b % 2 === 0 ? 0.15 : 0.08);
+  if (b === 4 || b === 12) playSnare(ctx, time);
 
-  // ベースライン：0, 6, 8, 14拍目
-  if (b === 0 || b === 6 || b === 8 || b === 14) {
-    playBass(ctx, time, CHORDS[chordIdx][0]);
+  // クラップ：スネアと同時
+  if (b === 4 || b === 12) playClap(ctx, time);
+
+  // ハイハット：8分で刻む、オフビートは強め
+  playHihat(ctx, time, b % 4 === 2 ? 0.25 : 0.12);
+
+  // ベースライン：ガツンと
+  if (b === 0 || b === 3 || b === 8 || b === 11) {
+    playBass(ctx, time, CHORDS[chordIdx][0] * 0.5);
   }
 
-  // シンセコード：0拍目ごとに
-  if (b === 0) {
+  // シンセコード：8拍ごと
+  if (b === 0 || b === 8) {
     playSynth(ctx, time, CHORDS[chordIdx]);
   }
 
-  // シンセリード（メロディ）
-  const melodies = [0,null,2,null,1,null,2,null,0,null,null,2,1,null,0,null];
+  // リード：ノリノリメロディ
+  const melodies = [0,null,1,2,null,1,0,null,2,null,1,null,2,1,0,null];
   const noteIdx = melodies[b];
   if (noteIdx !== null) {
-    playLead(ctx, time, CHORDS[chordIdx][noteIdx] * 2);
+    playLead(ctx, time, CHORDS[chordIdx][noteIdx]);
   }
 }
 
-function playKick(ctx, time) {
+function playClap(ctx, time) {
+  const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random()*2-1) * Math.exp(-i/(ctx.sampleRate*0.02));
+  const src  = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  const fil  = ctx.createBiquadFilter();
+  src.buffer = buf;
+  fil.type = 'bandpass'; fil.frequency.value = 1200; fil.Q.value = 0.8;
+  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+  gain.gain.setValueAtTime(0.5, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+  src.start(time); src.stop(time + 0.1);
+}
+
+function playKick(ctx, time, vol=1.0) {
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain); gain.connect(ctx.destination);
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(150, time);
-  osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.3);
-  gain.gain.setValueAtTime(1.0, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
-  osc.start(time); osc.stop(time + 0.35);
+  osc.frequency.setValueAtTime(180, time);
+  osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.25);
+  gain.gain.setValueAtTime(vol, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+  osc.start(time); osc.stop(time + 0.3);
 }
 
 function playSnare(ctx, time) {
@@ -1201,12 +1217,14 @@ function playSynth(ctx, time, freqs) {
 function playLead(ctx, time, freq) {
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.connect(gain); gain.connect(ctx.destination);
+  const fil  = ctx.createBiquadFilter();
+  osc.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
   osc.type = 'sawtooth';
   osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.12, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_BEAT * 0.4);
-  osc.start(time); osc.stop(time + BGM_BEAT * 0.5);
+  fil.type = 'lowpass'; fil.frequency.value = 3000;
+  gain.gain.setValueAtTime(0.18, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + BGM_BEAT * 0.35);
+  osc.start(time); osc.stop(time + BGM_BEAT * 0.4);
 }
 
 // ── タイマー機能 ─────────────────────────────────────────
@@ -1369,11 +1387,12 @@ function updateTimerDisplay() {
 
 function finishTimer() {
   timerState.running = false;
-  // 完了音：ドミソド
-  beep(523,  0,    0.25);
-  beep(659,  0.28, 0.25);
-  beep(784,  0.56, 0.25);
-  beep(1047, 0.84, 0.5);
+  // 完了音：ピピピピッ×2 けたたましいアラーム
+  const alarmFreq = 1800;
+  const pattern = [0, 0.12, 0.24, 0.36, 0.6, 0.72, 0.84, 0.96];
+  pattern.forEach(t => beep(alarmFreq, t, 0.1, 0.8));
+  // 最後に低い音でフィニッシュ
+  beep(900, 1.2, 0.4, 0.6);
 
   const countdown = document.getElementById('timerCountdown');
   const ringWrap  = document.querySelector('.timer-ring-wrap');
