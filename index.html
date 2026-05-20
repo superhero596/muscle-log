@@ -1276,48 +1276,14 @@ function playKick(ctx, time) {
 }
 
 function playSnare(ctx, time) {
-  const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.18, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++)
-    data[i] = (Math.random()*2-1) * Math.exp(-i / (ctx.sampleRate * 0.04));
-  const src  = ctx.createBufferSource();
-  const gain = ctx.createGain();
-  const fil  = ctx.createBiquadFilter();
-  src.buffer = buf;
-  fil.type = 'highpass'; fil.frequency.value = 800;
-  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
-  gain.gain.setValueAtTime(0.55, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-  src.start(time); src.stop(time + 0.18);
-}
-
-function playClap(ctx, time) {
-  for (let i = 0; i < 3; i++) {
-    const buf  = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let j = 0; j < data.length; j++) data[j] = (Math.random()*2-1);
-    const src  = ctx.createBufferSource();
-    const gain = ctx.createGain();
-    const fil  = ctx.createBiquadFilter();
-    src.buffer = buf;
-    fil.type = 'bandpass'; fil.frequency.value = 1100; fil.Q.value = 0.7;
-    src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
-    const t = time + i * 0.012;
-    gain.gain.setValueAtTime(0.3, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-    src.start(t); src.stop(t + 0.06);
   }
-}
 
 function playHihat(ctx, time, vol, open) {
   const dur  = open ? 0.08 : 0.03;
-  const buf  = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = (Math.random()*2-1);
   const src  = ctx.createBufferSource();
   const gain = ctx.createGain();
   const fil  = ctx.createBiquadFilter();
-  src.buffer = buf;
+  src.buffer = getSharedNoise(ctx);
   fil.type = 'highpass'; fil.frequency.value = open ? 7000 : 9000;
   src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
   gain.gain.setValueAtTime(vol, time);
@@ -1391,13 +1357,6 @@ const DG_BASS_PATTERN = [
 const DG_SYNTH_HITS = [0,0,0,0, 1,0,0,0, 0,0,1,0, 0,1,0,0];
 
 // ノイズバッファキャッシュ
-let _dgNoise = null;
-function getDgNoise(ctx) {
-  if (!_dgNoise || _dgNoise.sampleRate !== ctx.sampleRate) {
-    _dgNoise = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
-    const d = _dgNoise.getChannelData(0);
-    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
-  }
   return _dgNoise;
 }
 
@@ -1537,55 +1496,9 @@ function dgKick(ctx, dest, time) {
 }
 
 function dgSnare(ctx, dest, time) {
-  const buf  = ctx.createBuffer(1, ctx.sampleRate*0.2, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.05));
-  const src  = ctx.createBufferSource();
-  const fil  = ctx.createBiquadFilter();
-  const gain = ctx.createGain();
-  src.buffer = buf; fil.type='bandpass'; fil.frequency.value=900; fil.Q.value=1.2;
-  gain.gain.setValueAtTime(0.5, time); gain.gain.exponentialRampToValueAtTime(0.001, time+0.18);
-  src.connect(fil); fil.connect(gain); gain.connect(dest);
-  src.start(time); src.stop(time+0.2);
-}
-
-function dgRim(ctx, dest, time) {
-  const osc  = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'triangle'; osc.frequency.value = 1200;
-  gain.gain.setValueAtTime(0.18, time); gain.gain.exponentialRampToValueAtTime(0.001, time+0.04);
-  osc.connect(gain); gain.connect(dest); osc.start(time); osc.stop(time+0.05);
-}
-
-function dgHat(ctx, dest, time, vol, open) {
+  function dgHat(ctx, dest, time, vol, open) {
   const dur  = open ? 0.09 : 0.025;
-  const buf  = ctx.createBuffer(1, Math.floor(ctx.sampleRate*dur), ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1);
-  const src  = ctx.createBufferSource();
-  const fil  = ctx.createBiquadFilter();
-  const gain = ctx.createGain();
-  src.buffer = buf; fil.type='highpass'; fil.frequency.value=open?6500:10000;
-  gain.gain.setValueAtTime(vol, time); gain.gain.exponentialRampToValueAtTime(0.001, time+dur);
-  src.connect(fil); fil.connect(gain); gain.connect(dest);
-  src.start(time); src.stop(time+dur+0.005);
-}
-
-function dgBass(ctx, dest, freq, time, dur, vol) {
-  const osc  = ctx.createOscillator();
-  const gain = ctx.createGain();
-  const fil  = ctx.createBiquadFilter();
-  osc.type='sawtooth'; osc.frequency.value=freq;
-  fil.type='lowpass'; fil.frequency.value=380; fil.Q.value=2.5;
-  // うねり感：音量がじわっと上がる
-  gain.gain.setValueAtTime(0.01, time);
-  gain.gain.linearRampToValueAtTime(vol, time+DG_STEP*0.3);
-  gain.gain.exponentialRampToValueAtTime(0.001, time+dur);
-  osc.connect(fil); fil.connect(gain); gain.connect(dest);
-  osc.start(time); osc.stop(time+dur+0.05);
-}
-
-function dgPad(ctx, dest, freqs, time, dur, vol, filterFreq) {
+  function dgPad(ctx, dest, freqs, time, dur, vol, filterFreq) {
   freqs.forEach((freq, i) => {
     // 各音をわずかにデチューンしてゆらぎを出す
     const detunes = [-8, -3, 0, 5];
@@ -1634,56 +1547,7 @@ function dgLead(ctx, dest, freq, time, dur) {
 }
 
 function dgRiser(ctx, dest, time, progress) {
-  const bufSize = Math.floor(ctx.sampleRate * DG_STEP);
-  if(bufSize <= 0) return;
-  const buf  = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for(let i=0;i<bufSize;i++) data[i]=(Math.random()*2-1);
-  const src  = ctx.createBufferSource();
-  const fil  = ctx.createBiquadFilter();
-  const gain = ctx.createGain();
-  src.buffer=buf; fil.type='bandpass';
-  fil.frequency.value = 800 + progress*6000; fil.Q.value=3;
-  gain.gain.setValueAtTime(0.12+progress*0.2, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time+DG_STEP*0.95);
-  src.connect(fil); fil.connect(gain); gain.connect(dest);
-  src.start(time); src.stop(time+DG_STEP);
-}
-
-// ── musclemusic！（Gemini作） ───────────────────────────
-const MUSCLE_CHORDS = [
-  [220.0, 261.6, 329.6],  // Am
-  [349.2, 440.0, 523.3],  // F
-  [261.6, 329.6, 392.0],  // C
-  [293.7, 392.0, 493.9],  // G
-];
-const MUSCLE_MELODY = [
-  2,null,1,2,null,0,1,null,
-  2,null,1,2,2,1,0,null,  // index3は範囲外なので2に修正
-  1,null,0,1,null,2,1,null,
-  2,1,0,1,2,2,2,null,     // index3,4は範囲外なので2に修正
-];
-
-function playStepMuscle(time, step, chordIdx, elapsed) {
-  const ctx  = getAudioCtx();
-  const b16  = step % 16;
-  const root = MUSCLE_CHORDS[chordIdx][0];
-  const total   = timerState.total || 60;
-  const tRemain = timerState.remaining || 0;
-  const sec = timerState.running ? (total - tRemain) : elapsed;
-  const BGM_STEP_M = (60/138)/4;
-
-  const isIntro      = sec < 5;
-  const isChorus     = sec >= 20 && sec < (total-5);
-  const isLastSprint = sec >= 45 && sec < (total-5);
-  const isFinish     = sec >= (total-5);
-
-  if (isIntro) {
-    if (b16 === 0) {
-      const filterFreq = 1000 + (sec * 600);
-      mSynth(ctx, time, MUSCLE_CHORDS[chordIdx], 0.12, filterFreq, BGM_STEP_M);
-    }
-    return;
+      return;
   }
   if (isFinish) {
     const progress = (step%16)/16;
@@ -1718,10 +1582,8 @@ function mDistKick(ctx, time) {
 }
 function mClap(ctx, time) {
   for(let i=0;i<3;i++){
-    const buf=ctx.createBuffer(1,ctx.sampleRate*0.05,ctx.sampleRate);
-    const data=buf.getChannelData(0); for(let j=0;j<data.length;j++) data[j]=(Math.random()*2-1);
-    const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
-    src.buffer=buf; fil.type='bandpass'; fil.frequency.value=1300-(i*80); fil.Q.value=1.2;
+        const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+    src.buffer = getSharedNoise(ctx); fil.type='bandpass'; fil.frequency.value=1300-(i*80); fil.Q.value=1.2;
     src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
     const t=time+i*0.006; gain.gain.setValueAtTime(0.3,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.04);
     src.start(t); src.stop(t+0.05);
@@ -1729,10 +1591,8 @@ function mClap(ctx, time) {
 }
 function mHihat(ctx, time, vol, open) {
   const dur=open?0.14:0.03;
-  const buf=ctx.createBuffer(1,ctx.sampleRate*dur,ctx.sampleRate);
-  const data=buf.getChannelData(0); for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1);
-  const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
-  src.buffer=buf; fil.type='highpass'; fil.frequency.value=open?5500:9000;
+    const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+  src.buffer = getSharedNoise(ctx); fil.type='highpass'; fil.frequency.value=open?5500:9000;
   src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
   gain.gain.setValueAtTime(vol,time); gain.gain.exponentialRampToValueAtTime(0.001,time+dur);
   src.start(time); src.stop(time+dur+0.01);
@@ -1764,12 +1624,8 @@ function mWideLead(ctx, time, freq, step) {
   });
 }
 function mRiserNoise(ctx, time, progress, step) {
-  const bufSize=Math.floor(ctx.sampleRate*step);
-  if(bufSize<=0) return;
-  const buf=ctx.createBuffer(1,bufSize,ctx.sampleRate);
-  const data=buf.getChannelData(0); for(let i=0;i<bufSize;i++) data[i]=(Math.random()*2-1);
-  const src=ctx.createBufferSource(), fil=ctx.createBiquadFilter(), gain=ctx.createGain();
-  src.buffer=buf; fil.type='bandpass'; fil.frequency.value=300+(progress*3500); fil.Q.value=2.0;
+    const src=ctx.createBufferSource(), fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  src.buffer = getSharedNoise(ctx); fil.type='bandpass'; fil.frequency.value=300+(progress*3500); fil.Q.value=2.0;
   src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
   gain.gain.setValueAtTime(0.15+(progress*0.15),time); gain.gain.exponentialRampToValueAtTime(0.001,time+step*0.98);
   src.start(time); src.stop(time+step);
@@ -1799,13 +1655,6 @@ const LB_HAT     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1];
 const LB_BASS_P  = [1,0,0,1,0,1,0,1,1,0,1,0,1,0,1,1];
 
 // ノイズバッファキャッシュ
-let _lbNoiseBuf = null;
-function getLbNoise(ctx) {
-  if(!_lbNoiseBuf || _lbNoiseBuf.sampleRate !== ctx.sampleRate) {
-    _lbNoiseBuf = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
-    const d = _lbNoiseBuf.getChannelData(0);
-    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
-  }
   return _lbNoiseBuf;
 }
 
@@ -1875,7 +1724,7 @@ function lbKick(ctx, dest, time, intensity=1) {
   osc.connect(gain); gain.connect(dest); osc.start(time); osc.stop(time+0.15);
 }
 function lbSnare(ctx, dest, time) {
-  const noise=ctx.createBufferSource(); noise.buffer=getLbNoise(ctx);
+  const noise=ctx.createBufferSource(); noise.buffer=getSharedNoise(ctx);
   const fil=ctx.createBiquadFilter(), gain=ctx.createGain();
   fil.type='highpass'; fil.frequency.value=1400;
   gain.gain.setValueAtTime(0.6,time); gain.gain.exponentialRampToValueAtTime(0.001,time+0.12);
@@ -1886,7 +1735,7 @@ function lbSnare(ctx, dest, time) {
   tone.connect(tg); tg.connect(dest); tone.start(time); tone.stop(time+0.1);
 }
 function lbHat(ctx, dest, time, open=false) {
-  const noise=ctx.createBufferSource(); noise.buffer=getLbNoise(ctx);
+  const noise=ctx.createBufferSource(); noise.buffer=getSharedNoise(ctx);
   const fil=ctx.createBiquadFilter(), gain=ctx.createGain();
   const dur=open?0.12:0.03;
   fil.type='highpass'; fil.frequency.value=7000;
@@ -1930,7 +1779,7 @@ function lbLead(ctx, dest, freq, time, duration, hype=1) {
   });
 }
 function lbBuildRoll(ctx, dest, time, progress) {
-  const noise=ctx.createBufferSource(); noise.buffer=getLbNoise(ctx);
+  const noise=ctx.createBufferSource(); noise.buffer=getSharedNoise(ctx);
   const fil=ctx.createBiquadFilter(), gain=ctx.createGain();
   fil.type='bandpass'; fil.frequency.setValueAtTime(1500+progress*2000,time); fil.frequency.linearRampToValueAtTime(4000+progress*5000,time+0.08);
   gain.gain.setValueAtTime(0.08,time); gain.gain.linearRampToValueAtTime(0.22,time+0.08);
@@ -1971,11 +1820,24 @@ function getAudioCtx() {
   if (!_audioCtx) {
     _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  // suspended状態ならresumeしてから返す（iOS Safari対策）
   if (_audioCtx.state === 'suspended') {
     _audioCtx.resume();
   }
   return _audioCtx;
+}
+
+// ── 共通ノイズバッファ（全曲・全効果音で使い回す） ────────
+let _sharedNoise = null;
+function getSharedNoise(ctx) {
+  if (!_sharedNoise || _sharedNoise.sampleRate !== ctx.sampleRate) {
+    const buf  = ctx.createBuffer(2, ctx.sampleRate * 2, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    _sharedNoise = buf;
+  }
+  return _sharedNoise;
 }
 
 // ユーザー操作時にAudioContextを確実に起動する
@@ -1987,7 +1849,7 @@ function ensureAudio() {
   // iOSでは一度でも音を鳴らしておくと以降安定する
   const buf  = ctx.createBuffer(1, 1, ctx.sampleRate);
   const src  = ctx.createBufferSource();
-  src.buffer = buf;
+  src.buffer = getSharedNoise(ctx);
   src.connect(ctx.destination);
   src.start(0);
 }
