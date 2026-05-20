@@ -418,6 +418,14 @@ input,select,textarea{font-size:16px !important}
       <label>アイコン</label>
       <div class="emoji-picker" id="timerEmojiPicker"></div>
     </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>BGMスタイル</label>
+      <select id="teBgmTrack">
+        <option value="sweat">💪 Sweat & Level Up（Claude）</option>
+        <option value="muscle">🔥 musclemusic！（Gemini）</option>
+        <option value="limitbreak">⚡ LIMIT BREAK JUMP!!（ChatGPT）</option>
+      </select>
+    </div>
     <div class="field" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between">
       <label style="margin-bottom:0">BGMをデフォルトON</label>
       <input type="checkbox" id="teBgm" style="width:20px;height:20px;accent-color:var(--accent)">
@@ -1046,6 +1054,14 @@ function resetData() {
   setSyncState('');
 }
 
+// ── BGMトラック定義 ──────────────────────────────────────
+const BGM_TRACKS = {
+  sweat:     { name: '💪 Sweat & Level Up（Claude）',   bpm: 147 },
+  muscle:    { name: '🔥 musclemusic！（Gemini）',       bpm: 138 },
+  limitbreak:{ name: '⚡ LIMIT BREAK JUMP!!（ChatGPT）', bpm: 136 },
+};
+let bgmTrack = 'sweat'; // 現在のトラック
+
 // ── BGM生成（ユーロビート風） ────────────────────────────
 let bgmState = { playing: false, scheduleId: null, nextBeat: 0, beat: 0, chord: 0, dropped: false };
 
@@ -1092,8 +1108,9 @@ function toggleBGM() {
   }
 }
 
-function startBGM(drop=false) {
+function startBGM(drop=false, track=null) {
   if (bgmState.playing) return;
+  if (track) bgmTrack = track;
   bgmState.playing  = true;
   bgmState.beat     = 0;
   bgmState.chord    = 0;
@@ -1121,7 +1138,13 @@ function scheduleBGM() {
     // 経過秒数（BGM開始からの時間）
     const elapsed   = bgmState.beat * BGM_STEP;
 
-    playStep(bgmState.nextBeat, step, chordIdx, elapsed);
+    if (bgmTrack === 'muscle') {
+      playStepMuscle(bgmState.nextBeat, step, chordIdx, elapsed);
+    } else if (bgmTrack === 'limitbreak') {
+      playStepLimitBreak(bgmState.nextBeat, step, chordIdx, elapsed);
+    } else {
+      playStep(bgmState.nextBeat, step, chordIdx, elapsed);
+    }
 
     bgmState.beat++;
     bgmState.nextBeat += BGM_STEP;
@@ -1308,10 +1331,309 @@ function playLead(ctx, time, freq) {
   osc.start(time); osc.stop(time + BGM_STEP);
 }
 
+// ── musclemusic！（Gemini作） ───────────────────────────
+const MUSCLE_CHORDS = [
+  [220.0, 261.6, 329.6],  // Am
+  [349.2, 440.0, 523.3],  // F
+  [261.6, 329.6, 392.0],  // C
+  [293.7, 392.0, 493.9],  // G
+];
+const MUSCLE_MELODY = [
+  2,null,1,2,null,0,1,null,
+  2,null,1,2,2,1,0,null,  // index3は範囲外なので2に修正
+  1,null,0,1,null,2,1,null,
+  2,1,0,1,2,2,2,null,     // index3,4は範囲外なので2に修正
+];
+
+function playStepMuscle(time, step, chordIdx, elapsed) {
+  const ctx  = getAudioCtx();
+  const b16  = step % 16;
+  const root = MUSCLE_CHORDS[chordIdx][0];
+  const total   = timerState.total || 60;
+  const tRemain = timerState.remaining || 0;
+  const sec = timerState.running ? (total - tRemain) : elapsed;
+  const BGM_STEP_M = (60/138)/4;
+
+  const isIntro      = sec < 5;
+  const isChorus     = sec >= 20 && sec < (total-5);
+  const isLastSprint = sec >= 45 && sec < (total-5);
+  const isFinish     = sec >= (total-5);
+
+  if (isIntro) {
+    if (b16 === 0) {
+      const filterFreq = 1000 + (sec * 600);
+      mSynth(ctx, time, MUSCLE_CHORDS[chordIdx], 0.12, filterFreq, BGM_STEP_M);
+    }
+    return;
+  }
+  if (isFinish) {
+    const progress = (step%16)/16;
+    mRiserNoise(ctx, time, progress, BGM_STEP_M);
+    return;
+  }
+  if (b16 % 4 === 0) mDistKick(ctx, time);
+  if (b16 === 4 || b16 === 12) mClap(ctx, time);
+  if (b16 % 4 === 2) mHihat(ctx, time, 0.28, true);
+  else if (isLastSprint && b16 % 2 === 0) mHihat(ctx, time, 0.15, false);
+  if (b16 % 4 === 0 || b16 % 4 === 2) mBass(ctx, time, root*0.5, BGM_STEP_M);
+  if (b16 === 0 || b16 === 8) mSynth(ctx, time, MUSCLE_CHORDS[chordIdx], 0.06, 2000, BGM_STEP_M);
+  if (isChorus || isLastSprint) {
+    const melIdx = MUSCLE_MELODY[step % MUSCLE_MELODY.length];
+    if (melIdx !== null) {
+      const octave = isLastSprint ? 4 : 2;
+      mWideLead(ctx, time, MUSCLE_CHORDS[chordIdx][melIdx] * octave, BGM_STEP_M);
+    }
+  }
+}
+
+function mDistKick(ctx, time) {
+  const osc=ctx.createOscillator(), gain=ctx.createGain();
+  const ws=ctx.createWaveShaper();
+  const n=44100, curve=new Float32Array(n), k=10, deg=Math.PI/180;
+  for(let i=0;i<n;i++){const x=(i*2)/n-1; curve[i]=((3+k)*x*20*deg)/(Math.PI+k*Math.abs(x));}
+  ws.curve=curve; ws.oversample='4x';
+  osc.connect(ws); ws.connect(gain); gain.connect(ctx.destination);
+  osc.type='sine'; osc.frequency.setValueAtTime(180,time); osc.frequency.exponentialRampToValueAtTime(35,time+0.14);
+  gain.gain.setValueAtTime(1.3,time); gain.gain.exponentialRampToValueAtTime(0.001,time+0.22);
+  osc.start(time); osc.stop(time+0.24);
+}
+function mClap(ctx, time) {
+  for(let i=0;i<3;i++){
+    const buf=ctx.createBuffer(1,ctx.sampleRate*0.05,ctx.sampleRate);
+    const data=buf.getChannelData(0); for(let j=0;j<data.length;j++) data[j]=(Math.random()*2-1);
+    const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+    src.buffer=buf; fil.type='bandpass'; fil.frequency.value=1300-(i*80); fil.Q.value=1.2;
+    src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+    const t=time+i*0.006; gain.gain.setValueAtTime(0.3,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.04);
+    src.start(t); src.stop(t+0.05);
+  }
+}
+function mHihat(ctx, time, vol, open) {
+  const dur=open?0.14:0.03;
+  const buf=ctx.createBuffer(1,ctx.sampleRate*dur,ctx.sampleRate);
+  const data=buf.getChannelData(0); for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1);
+  const src=ctx.createBufferSource(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+  src.buffer=buf; fil.type='highpass'; fil.frequency.value=open?5500:9000;
+  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+  gain.gain.setValueAtTime(vol,time); gain.gain.exponentialRampToValueAtTime(0.001,time+dur);
+  src.start(time); src.stop(time+dur+0.01);
+}
+function mBass(ctx, time, freq, step) {
+  const osc=ctx.createOscillator(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+  osc.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+  osc.type='sawtooth'; osc.frequency.value=freq; fil.type='lowpass'; fil.frequency.value=450;
+  gain.gain.setValueAtTime(0.4,time); gain.gain.exponentialRampToValueAtTime(0.001,time+step*1.5);
+  osc.start(time); osc.stop(time+step*1.6);
+}
+function mSynth(ctx, time, freqs, vol, filterFreq, step) {
+  freqs.forEach(freq => {
+    const osc=ctx.createOscillator(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+    osc.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+    osc.type='sawtooth'; osc.frequency.value=freq; fil.type='lowpass'; fil.frequency.value=filterFreq;
+    gain.gain.setValueAtTime(vol,time); gain.gain.exponentialRampToValueAtTime(0.001,time+step*12);
+    osc.start(time); osc.stop(time+step*13);
+  });
+}
+function mWideLead(ctx, time, freq, step) {
+  [-6,0,6].forEach((detune,idx) => {
+    const osc=ctx.createOscillator(), gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+    osc.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+    osc.type='sawtooth'; osc.frequency.value=freq; osc.detune.value=detune;
+    fil.type='lowpass'; fil.frequency.setValueAtTime(4500,time); fil.frequency.exponentialRampToValueAtTime(1800,time+step*0.9);
+    gain.gain.setValueAtTime(0.12,time); gain.gain.exponentialRampToValueAtTime(0.001,time+step*0.95);
+    osc.start(time); osc.stop(time+step);
+  });
+}
+function mRiserNoise(ctx, time, progress, step) {
+  const bufSize=Math.floor(ctx.sampleRate*step);
+  if(bufSize<=0) return;
+  const buf=ctx.createBuffer(1,bufSize,ctx.sampleRate);
+  const data=buf.getChannelData(0); for(let i=0;i<bufSize;i++) data[i]=(Math.random()*2-1);
+  const src=ctx.createBufferSource(), fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  src.buffer=buf; fil.type='bandpass'; fil.frequency.value=300+(progress*3500); fil.Q.value=2.0;
+  src.connect(fil); fil.connect(gain); gain.connect(ctx.destination);
+  gain.gain.setValueAtTime(0.15+(progress*0.15),time); gain.gain.exponentialRampToValueAtTime(0.001,time+step*0.98);
+  src.start(time); src.stop(time+step);
+}
+
+// ── LIMIT BREAK JUMP!!（ChatGPT作） ─────────────────────
+const LB_BPM = 136;
+const LB_STEP = (60/LB_BPM)/4;
+
+const LB_NOTE_TABLE = {C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
+function lbNoteToFreq(note) {
+  const m = note.match(/^([A-G]#?)(-?\d)$/);
+  if(!m) return 440;
+  const midi = LB_NOTE_TABLE[m[1]] + (parseInt(m[2])+1)*12;
+  return 440 * Math.pow(2, (midi-69)/12);
+}
+
+const LB_PROG = [
+  ['C4','E4','G4'], ['G4','B4','D5'], ['A4','C5','E5'], ['F4','A4','C5']
+];
+const LB_BASS = ['C2','G1','A1','F1'];
+const LB_MELODY  = [0,2,4,7,7,4,2,0,4,7,9,7,4,2,0,-1];
+const LB_MELODY2 = [7,9,11,12,11,9,7,4,7,9,12,14,12,9,7,4];
+const LB_KICK    = [1,0,0,0,1,0,0,1,1,0,1,0,1,0,0,1];
+const LB_SNARE   = [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0];
+const LB_HAT     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1];
+const LB_BASS_P  = [1,0,0,1,0,1,0,1,1,0,1,0,1,0,1,1];
+
+// ノイズバッファキャッシュ
+let _lbNoiseBuf = null;
+function getLbNoise(ctx) {
+  if(!_lbNoiseBuf || _lbNoiseBuf.sampleRate !== ctx.sampleRate) {
+    _lbNoiseBuf = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
+    const d = _lbNoiseBuf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  return _lbNoiseBuf;
+}
+
+// マスターチェーン（コンプ+ローパス）
+let _lbFx = null;
+function getLbFx(ctx) {
+  if(!_lbFx) {
+    const master = ctx.createGain();
+    const comp   = ctx.createDynamicsCompressor();
+    const lp     = ctx.createBiquadFilter();
+    lp.type='lowpass'; lp.frequency.value=18000;
+    comp.threshold.value=-16; comp.knee.value=18; comp.ratio.value=4;
+    comp.attack.value=0.003; comp.release.value=0.25;
+    master.gain.value=0.85;
+    master.connect(comp); comp.connect(lp); lp.connect(ctx.destination);
+    _lbFx = {input:master, lowpass:lp};
+  }
+  return _lbFx;
+}
+
+function playStepLimitBreak(time, step, chordIdx, elapsed) {
+  const ctx = getAudioCtx();
+  const fx  = getLbFx(ctx);
+  const b16 = step % 16;
+  const total   = timerState.total || 60;
+  const tRemain = timerState.remaining || 0;
+  const sec = timerState.running ? (total - tRemain) : elapsed;
+  const chord   = LB_PROG[chordIdx];
+  const bassRoot= LB_BASS[chordIdx];
+
+  if (sec < 5) {
+    if (b16 % 4 === 0) lbSuperChord(ctx, fx.input, chord, time, 0.5, sec/5);
+    if (b16 % 8 === 0) lbKick(ctx, fx.input, time, 0.7);
+    return;
+  }
+  if (sec >= (total-5)) {
+    const progress=(sec-(total-5))/5;
+    lbBuildRoll(ctx, fx.input, time, progress);
+    if (b16 % 4 === 0) lbKick(ctx, fx.input, time, 1.2+progress*0.8);
+    if (sec >= total-0.6 && b16 === 15) lbFinishAlarm(ctx, fx.input, time+0.02);
+    return;
+  }
+  if (LB_KICK[b16])  lbKick(ctx, fx.input, time, 1.0);
+  if (LB_SNARE[b16]) lbSnare(ctx, fx.input, time);
+  if (LB_HAT[b16])   lbHat(ctx, fx.input, time, b16%4===3);
+  if (LB_BASS_P[b16]) lbBass(ctx, fx.input, bassRoot, time, 0.18, 1);
+  if (b16 % 4 === 0) lbSuperChord(ctx, fx.input, chord, time, 0.45, sec>=20?1.3:0.8);
+  if (sec >= 20 && sec < 45) {
+    const mn = LB_MELODY[b16];
+    if (mn !== -1) {
+      const freq = lbNoteToFreq(chord[0]) * Math.pow(2, mn/12);
+      lbLead(ctx, fx.input, freq, time, 0.22, 1);
+    }
+  }
+  if (sec >= 45 && sec < (total-5)) {
+    const mn = LB_MELODY2[b16];
+    const freq = lbNoteToFreq(chord[0]) * Math.pow(2, mn/12);
+    lbLead(ctx, fx.input, freq*2, time, 0.16, 1.35);
+    if (b16%2===1) lbHat(ctx, fx.input, time, false);
+  }
+}
+
+function lbKick(ctx, dest, time, intensity=1) {
+  const osc=ctx.createOscillator(), gain=ctx.createGain();
+  osc.type='sine'; osc.frequency.setValueAtTime(160,time); osc.frequency.exponentialRampToValueAtTime(42,time+0.14);
+  gain.gain.setValueAtTime(1.2*intensity,time); gain.gain.exponentialRampToValueAtTime(0.001,time+0.14);
+  osc.connect(gain); gain.connect(dest); osc.start(time); osc.stop(time+0.15);
+}
+function lbSnare(ctx, dest, time) {
+  const noise=ctx.createBufferSource(); noise.buffer=getLbNoise(ctx);
+  const fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  fil.type='highpass'; fil.frequency.value=1400;
+  gain.gain.setValueAtTime(0.6,time); gain.gain.exponentialRampToValueAtTime(0.001,time+0.12);
+  noise.connect(fil); fil.connect(gain); gain.connect(dest); noise.start(time); noise.stop(time+0.13);
+  const tone=ctx.createOscillator(), tg=ctx.createGain();
+  tone.type='triangle'; tone.frequency.value=180;
+  tg.gain.setValueAtTime(0.25,time); tg.gain.exponentialRampToValueAtTime(0.001,time+0.08);
+  tone.connect(tg); tg.connect(dest); tone.start(time); tone.stop(time+0.1);
+}
+function lbHat(ctx, dest, time, open=false) {
+  const noise=ctx.createBufferSource(); noise.buffer=getLbNoise(ctx);
+  const fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  const dur=open?0.12:0.03;
+  fil.type='highpass'; fil.frequency.value=7000;
+  gain.gain.setValueAtTime(0.18,time); gain.gain.exponentialRampToValueAtTime(0.001,time+dur);
+  noise.connect(fil); fil.connect(gain); gain.connect(dest); noise.start(time); noise.stop(time+dur+0.01);
+}
+function lbSuperChord(ctx, dest, chord, time, duration, brightness=1) {
+  const cg=ctx.createGain(), fil=ctx.createBiquadFilter();
+  cg.gain.setValueAtTime(0.0001,time); cg.gain.linearRampToValueAtTime(0.22,time+0.02);
+  cg.gain.linearRampToValueAtTime(0.18,time+duration-0.08); cg.gain.exponentialRampToValueAtTime(0.0001,time+duration);
+  fil.type='lowpass'; fil.frequency.value=1800+brightness*5000; fil.Q.value=6;
+  cg.connect(fil); fil.connect(dest);
+  chord.forEach(note => {
+    const baseFreq=lbNoteToFreq(note);
+    [-10,-4,0,4,10].forEach((detune,i) => {
+      const osc=ctx.createOscillator(), og=ctx.createGain();
+      osc.type='sawtooth'; osc.frequency.value=baseFreq; osc.detune.value=detune; og.gain.value=0.08;
+      osc.connect(og); og.connect(cg); osc.start(time); osc.stop(time+duration+0.05);
+    });
+  });
+}
+function lbBass(ctx, dest, note, time, duration, drive=1) {
+  const freq=lbNoteToFreq(note);
+  const fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  fil.type='lowpass'; fil.frequency.value=400+drive*800;
+  gain.gain.setValueAtTime(0.0001,time); gain.gain.linearRampToValueAtTime(0.4,time+0.01); gain.gain.exponentialRampToValueAtTime(0.001,time+duration);
+  [0,-8,8].forEach(detune => {
+    const osc=ctx.createOscillator(); osc.type='sawtooth'; osc.frequency.value=freq; osc.detune.value=detune;
+    osc.connect(fil); osc.start(time); osc.stop(time+duration+0.05);
+  });
+  fil.connect(gain); gain.connect(dest);
+}
+function lbLead(ctx, dest, freq, time, duration, hype=1) {
+  const gain=ctx.createGain(), fil=ctx.createBiquadFilter();
+  gain.gain.setValueAtTime(0.0001,time); gain.gain.linearRampToValueAtTime(0.22*hype,time+0.01); gain.gain.exponentialRampToValueAtTime(0.0001,time+duration);
+  fil.type='bandpass'; fil.frequency.value=2200+hype*2000; fil.Q.value=6;
+  gain.connect(fil); fil.connect(dest);
+  [-12,-4,0,4,12].forEach(detune => {
+    const osc=ctx.createOscillator(); osc.type='sawtooth'; osc.frequency.value=freq; osc.detune.value=detune;
+    osc.connect(gain); osc.start(time); osc.stop(time+duration+0.05);
+  });
+}
+function lbBuildRoll(ctx, dest, time, progress) {
+  const noise=ctx.createBufferSource(); noise.buffer=getLbNoise(ctx);
+  const fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  fil.type='bandpass'; fil.frequency.setValueAtTime(1500+progress*2000,time); fil.frequency.linearRampToValueAtTime(4000+progress*5000,time+0.08);
+  gain.gain.setValueAtTime(0.08,time); gain.gain.linearRampToValueAtTime(0.22,time+0.08);
+  noise.connect(fil); fil.connect(gain); gain.connect(dest); noise.start(time); noise.stop(time+0.09);
+  const osc=ctx.createOscillator(), og=ctx.createGain();
+  osc.type='square'; osc.frequency.setValueAtTime(500+progress*600,time); osc.frequency.linearRampToValueAtTime(1200+progress*1000,time+0.08);
+  og.gain.setValueAtTime(0.05,time); og.gain.exponentialRampToValueAtTime(0.001,time+0.08);
+  osc.connect(og); og.connect(dest); osc.start(time); osc.stop(time+0.09);
+}
+function lbFinishAlarm(ctx, dest, time) {
+  [0,0.15,0.3].forEach(offset => {
+    const osc=ctx.createOscillator(), gain=ctx.createGain();
+    osc.type='sawtooth'; osc.frequency.setValueAtTime(880,time+offset); osc.frequency.linearRampToValueAtTime(1760,time+offset+0.18);
+    gain.gain.setValueAtTime(0.001,time+offset); gain.gain.linearRampToValueAtTime(0.45,time+offset+0.02); gain.gain.exponentialRampToValueAtTime(0.001,time+offset+0.25);
+    osc.connect(gain); gain.connect(dest); osc.start(time+offset); osc.stop(time+offset+0.26);
+  });
+}
+
 // ── タイマー機能 ─────────────────────────────────────────
 const DEFAULT_TIMERS = [
-  {id:1, name:'プランク',           icon:'🧘', seconds:30, bgm:false},
-  {id:2, name:'ジャンプダイエット', icon:'🦘', seconds:60, bgm:true},
+  {id:1, name:'プランク',           icon:'🧘', seconds:30, bgm:false, bgmTrack:'sweat'},
+  {id:2, name:'ジャンプダイエット', icon:'🦘', seconds:60, bgm:true,  bgmTrack:'limitbreak'},
 ];
 
 let timerState = {
@@ -1405,6 +1727,7 @@ function startTimer(idx) {
   // 3・2・1・GO カウントダウン
   // タイマーのBGM設定に従って自動制御
   const useBGM = t.bgm !== false;
+  bgmTrack = t.bgmTrack || 'eurobeat';
   document.getElementById('bgmBtn').textContent = useBGM ? '🔇 BGM OFF' : '🎵 BGM ON';
   stopBGM();
 
@@ -1544,9 +1867,10 @@ function togglePause() {
 function openTimerEditor(idx) {
   timerState.editingIdx = idx;
   const t = idx >= 0 ? timerState.timers[idx] : null;
-  document.getElementById('teName').value    = t?.name    ?? '';
-  document.getElementById('teSeconds').value = t?.seconds ?? 60;
-  document.getElementById('teBgm').checked   = t?.bgm ?? false;
+  document.getElementById('teName').value       = t?.name     ?? '';
+  document.getElementById('teSeconds').value    = t?.seconds  ?? 60;
+  document.getElementById('teBgm').checked      = t?.bgm      ?? false;
+  document.getElementById('teBgmTrack').value   = t?.bgmTrack ?? 'eurobeat';
   document.getElementById('timerEditorTitle').textContent = idx >= 0 ? 'タイマーを編集' : 'タイマーを追加';
   const ep       = document.getElementById('timerEmojiPicker');
   const selEmoji = t?.icon ?? '⏱️';
@@ -1566,10 +1890,11 @@ function saveTimerEditor() {
   if (!name) { alert('名前を入力してください'); return; }
   const seconds = parseInt(document.getElementById('teSeconds').value) || 60;
   const icon    = document.querySelector('#timerEmojiPicker .emoji-opt.sel')?.textContent.trim() ?? '⏱️';
-  const bgm = document.getElementById('teBgm').checked;
+  const bgm      = document.getElementById('teBgm').checked;
+  const bgmTrackVal = document.getElementById('teBgmTrack').value;
   const obj = {
     id:      timerState.editingIdx >= 0 ? timerState.timers[timerState.editingIdx].id : Date.now(),
-    name, icon, seconds, bgm
+    name, icon, seconds, bgm, bgmTrack: bgmTrackVal
   };
   if (timerState.editingIdx >= 0) timerState.timers[timerState.editingIdx] = obj;
   else timerState.timers.push(obj);
