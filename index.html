@@ -227,7 +227,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.02</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.04</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -430,7 +430,10 @@ input,select,textarea{font-size:16px !important}
           <option value="deepgravity">🌊 Deep Gravity（Claude）</option>
           <option value="muscle">🔥 musclemusic！（Gemini）</option>
           <option value="limitbreak">⚡ LIMIT BREAK JUMP!!（ChatGPT）</option>
-        <option value="wargod">⚔️ WAR GOD RUSH（ChatGPT）</option>
+        <option value="wargod">⚔️ WAR GOD RUSH（Claude）</option>
+        <option value="lubu">👹 HUGE LURKER（Gemini）</option>
+        <option value="lubu">👹 HUGE LURKER（Gemini）</option>
+        
         </select>
         <button id="modalPreviewBtn" class="btn-preview" style="width:64px;flex-shrink:0"
           onclick="toggleModalPreview()">▶ 試聴</button>
@@ -1075,11 +1078,12 @@ const BGM_TRACKS = {
   deepgravity:{ name: '🌊 Deep Gravity（Claude）',        bpm: 124 },
   muscle:     { name: '🔥 musclemusic！（Gemini）',       bpm: 138 },
   limitbreak: { name: '⚡ LIMIT BREAK JUMP!!（ChatGPT）', bpm: 136 },
-  wargod:     { name: '⚔️ WAR GOD RUSH（ChatGPT）',      bpm: 142 },
+  wargod:     { name: '⚔️ WAR GOD RUSH（Claude）',       bpm: 142 },
+  lubu:       { name: '👹 HUGE LURKER（Gemini）',          bpm: 140 },
   rotation:   { name: '🔄 ローテーション（順番）',         bpm: 0   },
   random:     { name: '🎲 ランダム',                      bpm: 0   },
 };
-const ROTATION_TRACKS = ['sweat','deepgravity','muscle','limitbreak','wargod'];
+const ROTATION_TRACKS = ['sweat','deepgravity','muscle','limitbreak','wargod','lubu'];
 let rotationIdx = 0;
 
 function resolveTrack(trackKey) {
@@ -1182,6 +1186,7 @@ function getCurrentStep() {
   switch(bgmTrack) {
     case 'deepgravity': return DG_STEP;
     case 'wargod':      return WG_STEP;
+    case 'lubu':        return (60/140)/4;
     case 'limitbreak':  return LB_STEP;
     case 'muscle':      return (60/138)/4;
     default:            return BGM_STEP; // sweat: 147BPM
@@ -1208,6 +1213,8 @@ function scheduleBGM() {
       playStepDeepGravity(bgmState.nextBeat, step, chordIdx, elapsed);
     } else if (bgmTrack === 'wargod') {
       playStepWarGod(bgmState.nextBeat, step, elapsed);
+    } else if (bgmTrack === 'lubu') {
+      playStepLubu(bgmState.nextBeat, step, elapsed);
     } else {
       playStep(bgmState.nextBeat, step, chordIdx, elapsed);
     }
@@ -1674,7 +1681,140 @@ function mRiserNoise(ctx, time, progress, step) {
   src.start(time); src.stop(time+step);
 }
 
-// ── WAR GOD RUSH（Claude版：真・呂布テーマ） ───────────────
+
+// ── HUGE LURKER（Gemini作：呂布テーマ風） ────────────────
+// BPM140 Eフリジアン＋ディミニッシュ＋重低音サイバーメタル
+const LB2_BPM  = 140;
+const LB2_STEP = (60 / LB2_BPM) / 4;
+const LB2_BEAT = 60 / LB2_BPM;
+
+// Eフリジアン（E, E, F, F, E, E, F, G の繰り返し）
+const LUBU_BASE_NOTES = [40,40,41,41,40,40,41,43];
+// 16分音符シンセパターン（Eフリジアン分散＋ディミニッシュ）
+const LUBU_SYNTH = [
+  64,67,71,76,  // Em分散（E,G,B,E）
+  65,69,72,77,  // F分散（F,A,C,F）
+  64,67,71,76,
+  65,68,71,74,  // ディミニッシュ（F,G#,B,D）
+];
+// キック：重めシンコペーション
+const LUBU_KICK  = [1,0,0,1,1,0,0,0, 1,0,0,1,1,0,1,0];
+const LUBU_SNARE = [0,0,1,0,0,0,1,0, 0,0,1,0,0,0,1,0];
+const LUBU_HAT   = [1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1];
+
+function midiToFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function playStepLubu(time, step, elapsed) {
+  const ctx  = getAudioCtx();
+  const dest = ctx.destination;
+  const b16  = step % 16;
+
+  const total   = timerState.total || 60;
+  const tRemain = timerState.remaining || 0;
+  const sec     = timerState.running ? (total - tRemain) : elapsed;
+
+  const isIntro      = sec < 5;
+  const isChorus     = sec >= 20 && sec < (total-5);
+  const isLastSprint = sec >= 45 && sec < (total-5);
+  const isFinish     = sec >= (total-5);
+
+  // ── イントロ：シンセとベースだけ ──────────────────────────
+  if (isIntro) {
+    if (b16 % 4 === 0) {
+      const bIdx = Math.floor(step/4) % LUBU_BASE_NOTES.length;
+      lubuBass(ctx, dest, midiToFreq(LUBU_BASE_NOTES[bIdx]), time);
+    }
+    const sFreq = midiToFreq(LUBU_SYNTH[step % LUBU_SYNTH.length]);
+    lubuSynth(ctx, dest, sFreq, time, 0.05);
+    return;
+  }
+
+  // ── フィニッシュ：連打 ────────────────────────────────────
+  if (isFinish) {
+    const p = (sec-(total-5))/5;
+    if (b16 % 2 === 0) lubuKick(ctx, dest, time, 1.0+p*0.5);
+    lubuSnare(ctx, dest, time);
+    lubuRiser(ctx, dest, time, p);
+    return;
+  }
+
+  // ── リズム隊 ─────────────────────────────────────────────
+  if (LUBU_KICK[b16])  lubuKick(ctx, dest, time, 1.0);
+  if (LUBU_SNARE[b16]) lubuSnare(ctx, dest, time);
+  if (LUBU_HAT[b16])   lubuHat(ctx, dest, time);
+
+  // ── 重低音ベース（1拍ごと）──────────────────────────────
+  if (b16 % 4 === 0) {
+    const bIdx = Math.floor(step/4) % LUBU_BASE_NOTES.length;
+    lubuBass(ctx, dest, midiToFreq(LUBU_BASE_NOTES[bIdx]), time);
+  }
+
+  // ── 迫り来るシンセ（16分音符） ───────────────────────────
+  const sFreq = midiToFreq(LUBU_SYNTH[step % LUBU_SYNTH.length]);
+  const sVol  = isLastSprint ? 0.14 : (isChorus ? 0.1 : 0.06);
+  lubuSynth(ctx, dest, sFreq * (isLastSprint ? 2 : 1), time, sVol);
+}
+
+function lubuKick(ctx, dest, time, power=1) {
+  const osc=ctx.createOscillator(), gain=ctx.createGain();
+  osc.type='sine';
+  osc.frequency.setValueAtTime(160,time); osc.frequency.exponentialRampToValueAtTime(36,time+0.16);
+  gain.gain.setValueAtTime(1.3*power,time); gain.gain.exponentialRampToValueAtTime(0.001,time+0.18);
+  osc.connect(gain); gain.connect(dest); osc.start(time); osc.stop(time+0.2);
+  // サブ
+  const s=ctx.createOscillator(), sg=ctx.createGain();
+  s.type='sine'; s.frequency.value=50;
+  sg.gain.setValueAtTime(0.6*power,time); sg.gain.exponentialRampToValueAtTime(0.001,time+0.28);
+  s.connect(sg); sg.connect(dest); s.start(time); s.stop(time+0.3);
+}
+
+function lubuSnare(ctx, dest, time) {
+  const buf=getSharedNoise(ctx,0.18);
+  const src=ctx.createBufferSource(), fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  src.buffer=buf; fil.type='highpass'; fil.frequency.value=1400;
+  gain.gain.setValueAtTime(0.6,time); gain.gain.exponentialRampToValueAtTime(0.001,time+0.12);
+  src.connect(fil); fil.connect(gain); gain.connect(dest);
+  src.start(time); src.stop(time+0.18);
+}
+
+function lubuHat(ctx, dest, time) {
+  const buf=getSharedNoise(ctx,0.03);
+  const src=ctx.createBufferSource(), fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  src.buffer=buf; fil.type='highpass'; fil.frequency.value=9000;
+  gain.gain.setValueAtTime(0.15,time); gain.gain.exponentialRampToValueAtTime(0.001,time+0.025);
+  src.connect(fil); fil.connect(gain); gain.connect(dest);
+  src.start(time); src.stop(time+0.03);
+}
+
+function lubuBass(ctx, dest, freq, time) {
+  const osc=ctx.createOscillator(), fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  osc.type='sawtooth'; osc.frequency.value=freq;
+  fil.type='lowpass'; fil.frequency.value=800;
+  gain.gain.setValueAtTime(0.3,time); gain.gain.exponentialRampToValueAtTime(0.01,time+LB2_BEAT*0.9);
+  osc.connect(fil); fil.connect(gain); gain.connect(dest);
+  osc.start(time); osc.stop(time+LB2_BEAT*0.9);
+}
+
+function lubuSynth(ctx, dest, freq, time, vol) {
+  const osc=ctx.createOscillator(), gain=ctx.createGain();
+  osc.type='square'; osc.frequency.value=freq;
+  gain.gain.setValueAtTime(vol,time); gain.gain.exponentialRampToValueAtTime(0.001,time+LB2_STEP*0.8);
+  osc.connect(gain); gain.connect(dest);
+  osc.start(time); osc.stop(time+LB2_STEP*0.8);
+}
+
+function lubuRiser(ctx, dest, time, progress) {
+  const buf=getSharedNoise(ctx,LB2_STEP);
+  const src=ctx.createBufferSource(), fil=ctx.createBiquadFilter(), gain=ctx.createGain();
+  src.buffer=buf; fil.type='bandpass'; fil.frequency.value=500+progress*7000; fil.Q.value=3;
+  gain.gain.setValueAtTime(0.1+progress*0.2,time); gain.gain.exponentialRampToValueAtTime(0.001,time+LB2_STEP*0.95);
+  src.connect(fil); fil.connect(gain); gain.connect(dest);
+  src.start(time); src.stop(time+LB2_STEP);
+}
+
+// ── WAR GOD RUSH（Claude作：真・呂布テーマ） ───────────────
 // BPM142 中国ペンタトニック×激重ドラム×圧倒的威圧感
 const WG_BPM  = 142;
 const WG_STEP = (60 / WG_BPM) / 4;
