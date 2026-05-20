@@ -1084,7 +1084,12 @@ const MELODY = [
 ];
 
 function toggleBGM() {
-  bgmState.playing ? stopBGM() : startBGM();
+  if (bgmState.playing) {
+    stopBGM();
+  } else {
+    // タイマー動作中ならドロップモードで再開
+    startBGM(timerState.running);
+  }
 }
 
 function startBGM(drop=false) {
@@ -1479,14 +1484,18 @@ function togglePause() {
 
   if (timerState.paused) {
     btn.textContent = '▶ 再開';
+    // BGMも止める
+    stopBGM();
     // 経過時間から現在のoffset位置を計算（0スタート→553ゴール）
-    const elapsed  = timerState.total - timerState.remaining;
-    const current  = Math.round(elapsed / timerState.total * 553);
+    const elapsed = timerState.total - timerState.remaining;
+    const current = Math.round(elapsed / timerState.total * 553);
     ring.style.transition = 'none';
     ring.setAttribute('stroke-dashoffset', String(current));
     timerState.pausedOffset = current;
   } else {
     btn.textContent = '⏸ 一時停止';
+    // BGMも再開（ドロップモード）
+    startBGM(true);
     // 一時停止位置から残り時間かけて553まで進める
     const from = timerState.pausedOffset ?? 0;
     ring.style.transition = 'none';
