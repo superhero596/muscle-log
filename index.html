@@ -227,7 +227,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.04</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.06</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -669,10 +669,11 @@ function renderHome() {
     grid.innerHTML += `
       <div class="menu-card${done?' done':''}" style="--card-color:${m.color}"
         onclick="quickTap(${m.id})"
-        oncontextmenu="openEdit(${m.id});return false;"
-        onpointerdown="startLongPress(${m.id})"
-        onpointerup="cancelLongPress()"
-        onpointerleave="cancelLongPress()">
+        oncontextmenu="return false;"
+        ontouchstart="startLongPress(${m.id})"
+        ontouchend="quickTapTouch(${m.id},event)"
+        ontouchmove="cancelLongPress()"
+        onclick="return false;">
         <div class="menu-card-icon">${m.icon}</div>
         <div class="menu-card-name">${m.name}</div>
         <div class="menu-card-sets" style="margin-top:6px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
@@ -731,16 +732,33 @@ async function deleteToday(id) {
 
 // ── 記録入力 ──────────────────────────────────────────────
 let longPressTimer = null;
+let longPressTriggered = false;
+let pointerDownTime = 0;
 
 function startLongPress(id) {
-  longPressTimer = setTimeout(() => { openEdit(id); }, 600);
+  longPressTriggered = false;
+  pointerDownTime = Date.now();
+  longPressTimer = setTimeout(() => {
+    longPressTriggered = true;
+    openEdit(id);
+  }, 600);
 }
 function cancelLongPress() {
   if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
 }
 
+function quickTapTouch(id, e) {
+  e.preventDefault();
+  cancelLongPress();
+  if (longPressTriggered) { longPressTriggered = false; return; }
+  if (Date.now() - pointerDownTime >= 600) return;
+  quickTap(id);
+}
+
 function quickTap(id) {
   cancelLongPress();
+  if (longPressTriggered) { longPressTriggered = false; return; }
+  if (Date.now() - pointerDownTime >= 600) return;
   const m = S.menus.find(x => x.id === id); if (!m) return;
   const tk = todayKey();
   const cur = S.todayDone[id];
