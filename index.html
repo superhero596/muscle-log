@@ -206,6 +206,8 @@ input,select,textarea{font-size:16px !important}
 .preset-name{font-size:15px;font-weight:500}
 .preset-time{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--accent)}
 .preset-edit-btns{display:flex;gap:6px}
+.group-tab{flex:1;padding:8px 4px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2);cursor:pointer;transition:all 0.2s}
+.group-tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
 .btn-preview{background:rgba(0,229,160,0.1);border:1px solid var(--accent);border-radius:6px;padding:5px 8px;color:var(--accent);font-size:11px;cursor:pointer;width:100%;text-align:center}
 .btn-preview.playing{background:rgba(0,229,160,0.25);animation:blink 0.8s infinite}
 
@@ -227,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.06</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.07</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -252,6 +254,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HOME -->
 <div class="screen active" id="screen-home">
   <div id="setupBanner"></div>
+  <div id="groupTabs" style="display:flex;gap:8px;margin-bottom:12px"></div>
   <div class="section-label">今日のメニュー</div>
   <div class="menu-grid" id="menuGrid"></div>
   <div class="section-label">今日の進捗</div>
@@ -314,8 +317,12 @@ input,select,textarea{font-size:16px !important}
   </div>
   <div class="settings-section">
     <div class="settings-title">メニュー管理</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="group-tab active" id="settingGroupHome" onclick="setSettingGroup('home')" style="flex:1">🏠 自宅メニュー</button>
+      <button class="group-tab" id="settingGroupGym" onclick="setSettingGroup('gym')" style="flex:1">🏋️ ジムメニュー</button>
+    </div>
     <div id="menuEditList"></div>
-    <button class="add-btn" onclick="openMenuEditor(-1)">＋ メニューを追加</button>
+    <button class="add-btn" id="addMenuBtn" onclick="openMenuEditor(-1)">＋ メニューを追加</button>
   </div>
   <div class="settings-section">
     <div class="settings-title">経験値 (XP) 設定</div>
@@ -348,6 +355,13 @@ input,select,textarea{font-size:16px !important}
 <div class="modal-bg" id="menuEditorModal" onclick="closeModal('menuEditorModal',event)">
   <div class="modal-inner">
     <div class="modal-title" id="editorTitle">メニューを追加</div>
+    <div class="field" style="margin-bottom:12px">
+      <label>グループ</label>
+      <select id="eGroup">
+        <option value="home">🏠 自宅メニュー</option>
+        <option value="gym">🏋️ ジムメニュー</option>
+      </select>
+    </div>
     <div class="field" style="margin-bottom:12px"><label>メニュー名</label><input type="text" id="eName" placeholder="例：腕立て伏せ"></div>
     <div class="field" style="margin-bottom:12px">
       <label>アイコン</label>
@@ -486,12 +500,13 @@ function getNextTitle(lv) {
 let S = {
   gasUrl: '',
   menus: [
-    {id:1, name:'プッシュアップ',          icon:'💪', color:'#00e5a0', reps:10, sets:3, xp:3},
-    {id:2, name:'腹（クランチ）',          icon:'🤸', color:'#4dabf7', reps:10, sets:3, xp:2},
-    {id:3, name:'腕（ダンベルカール）3kg', icon:'🏋️', color:'#ffa94d', reps:20, sets:3, xp:1},
-    {id:4, name:'スクワット',              icon:'🦵', color:'#cc5de8', reps:10, sets:3, xp:2},
-    {id:5, name:'プランク（30秒）',        icon:'🧘', color:'#ff4d6d', reps:1,  sets:3, xp:30},
+    {id:1, name:'プッシュアップ',          icon:'💪', color:'#00e5a0', reps:10, sets:3, xp:3,  group:'home'},
+    {id:2, name:'腹（クランチ）',          icon:'🤸', color:'#4dabf7', reps:10, sets:3, xp:2,  group:'home'},
+    {id:3, name:'腕（ダンベルカール）3kg', icon:'🏋️', color:'#ffa94d', reps:20, sets:3, xp:1,  group:'home'},
+    {id:4, name:'スクワット',              icon:'🦵', color:'#cc5de8', reps:10, sets:3, xp:2,  group:'home'},
+    {id:5, name:'プランク（30秒）',        icon:'🧘', color:'#ff4d6d', reps:1,  sets:3, xp:30, group:'home'},
   ],
+  activeGroup: 'home',
   records: {},         // { 'YYYY-MM-DD': [{menuId,reps,sets,note,xp}, ...] }
   totalXp: 0,
   level: 1,
@@ -651,6 +666,22 @@ function showTab(name) {
 }
 
 // ── HOME ──────────────────────────────────────────────────
+function getGroups() {
+  const groups = {};
+  S.menus.forEach(m => {
+    const g = m.group || 'home';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(m);
+  });
+  return groups;
+}
+
+function switchGroup(g) {
+  S.activeGroup = g;
+  saveLocal();
+  renderHome();
+}
+
 function renderHome() {
   // Setup banner
   const banner = document.getElementById('setupBanner');
@@ -660,9 +691,28 @@ function renderHome() {
       設定タブでGoogle Apps ScriptのURLを入力すると、スプレッドシートにデータが保存されます。
     </div>`;
 
+  // グループタブ描画
+  const groups = getGroups();
+  const groupNames = { home:'🏠 自宅', gym:'🏋️ ジム' };
+  const tabs = document.getElementById('groupTabs');
+  const groupKeys = Object.keys(groups);
+  if (groupKeys.length > 1) {
+    tabs.innerHTML = groupKeys.map(g =>
+      `<div class="group-tab${S.activeGroup===g?' active':''}" onclick="switchGroup('${g}')">
+        ${groupNames[g] || g}
+        <span style="font-size:10px;opacity:0.7">（${groups[g].length}種目）</span>
+      </div>`
+    ).join('');
+  } else {
+    tabs.innerHTML = '';
+  }
+
+  // アクティブグループのメニューのみ表示
+  const activeMenus = S.menus.filter(m => (m.group || 'home') === (S.activeGroup || 'home'));
+
   const grid = document.getElementById('menuGrid');
   grid.innerHTML = '';
-  S.menus.forEach(m => {
+  activeMenus.forEach(m => {
     const rec  = S.todayDone[m.id];
     const curSets = rec ? rec.sets : 0;
     const done = curSets >= m.sets;
@@ -670,9 +720,9 @@ function renderHome() {
       <div class="menu-card${done?' done':''}" style="--card-color:${m.color}"
         onclick="quickTap(${m.id})"
         oncontextmenu="return false;"
-        ontouchstart="startLongPress(${m.id})"
+        ontouchstart="startLongPress(${m.id},event)"
         ontouchend="quickTapTouch(${m.id},event)"
-        ontouchmove="cancelLongPress()"
+        ontouchmove="checkTouchMove(event)"
         onclick="return false;">
         <div class="menu-card-icon">${m.icon}</div>
         <div class="menu-card-name">${m.name}</div>
@@ -735,16 +785,35 @@ let longPressTimer = null;
 let longPressTriggered = false;
 let pointerDownTime = 0;
 
-function startLongPress(id) {
+let touchStartX = 0, touchStartY = 0, touchMoved = false;
+
+function startLongPress(id, e) {
   longPressTriggered = false;
+  touchMoved = false;
   pointerDownTime = Date.now();
+  if (e && e.touches) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }
   longPressTimer = setTimeout(() => {
-    longPressTriggered = true;
-    openEdit(id);
+    if (!touchMoved) {
+      longPressTriggered = true;
+      openEdit(id);
+    }
   }, 600);
 }
 function cancelLongPress() {
   if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+}
+function checkTouchMove(e) {
+  if (e && e.touches) {
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+    if (Math.sqrt(dx*dx + dy*dy) > 8) {
+      touchMoved = true;
+      cancelLongPress();
+    }
+  }
 }
 
 function quickTapTouch(id, e) {
@@ -798,8 +867,10 @@ function openEdit(id) {
 async function saveRecord() {
   const id   = S.activeMenuId;
   const m    = S.menus.find(x => x.id === id); if (!m) return;
-  const reps = parseInt(document.getElementById('inputReps').value) || m.reps;
-  const sets = parseInt(document.getElementById('inputSets').value) || m.sets;
+  const repsVal = document.getElementById('inputReps').value;
+  const setsVal = document.getElementById('inputSets').value;
+  const reps = repsVal !== '' ? parseInt(repsVal) : m.reps;
+  const sets = setsVal !== '' ? parseInt(setsVal) : m.sets;
   const note = document.getElementById('inputNote').value;
   const tk   = todayKey();
 
@@ -1003,10 +1074,17 @@ function renderHeatmap() {
 }
 
 // ── SETTINGS ─────────────────────────────────────────────
-function renderSettings() {
-  document.getElementById('gasUrl').value = S.gasUrl || '';
+let settingGroup = 'home';
+function setSettingGroup(g) {
+  settingGroup = g;
+  document.getElementById('settingGroupHome').classList.toggle('active', g==='home');
+  document.getElementById('settingGroupGym').classList.toggle('active', g==='gym');
+  renderMenuEditList();
+}
+function renderMenuEditList() {
   const list = document.getElementById('menuEditList');
-  list.innerHTML = S.menus.map((m,i) =>
+  const filtered = S.menus.map((m,i)=>({...m,_i:i})).filter(m=>(m.group||'home')===settingGroup);
+  list.innerHTML = filtered.map(m =>
     `<div class="menu-edit-card">
       <div class="menu-edit-icon">${m.icon}</div>
       <div class="menu-edit-info">
@@ -1014,11 +1092,18 @@ function renderSettings() {
         <div class="menu-edit-detail">${m.reps}回×${m.sets}セット ／ +${m.xp}XP</div>
       </div>
       <div class="menu-edit-btns">
-        <button class="btn-edit" onclick="openMenuEditor(${i})">編集</button>
-        <button class="btn-delete" onclick="deleteMenu(${i})">削除</button>
+        <button class="btn-edit" onclick="openMenuEditor(${m._i})">編集</button>
+        <button class="btn-delete" onclick="deleteMenu(${m._i})">削除</button>
       </div>
     </div>`
   ).join('');
+}
+
+function renderSettings() {
+  document.getElementById('gasUrl').value = S.gasUrl || '';
+  setSettingGroup(settingGroup);
+  const list = document.getElementById('menuEditList');
+  renderMenuEditList();
   const xpEl = document.getElementById('xpSettings');
   xpEl.innerHTML = S.menus.map(m =>
     `<div class="xp-row"><div class="xp-row-val" style="font-size:13px;color:var(--text)">${m.icon} ${m.name}</div><div class="xp-row-val">+${m.xp} XP</div></div>`
@@ -1048,6 +1133,7 @@ function openMenuEditor(idx) {
   EMOJIS.forEach(e => { ep.innerHTML+=`<div class="emoji-opt${e===S.selectedEmoji?' sel':''}" onclick="selEmoji('${e}')">${e}</div>`; });
   const cp=document.getElementById('colorPicker'); cp.innerHTML='';
   COLORS.forEach(c => { cp.innerHTML+=`<div class="color-opt${c===S.selectedColor?' sel':''}" style="background:${c}" data-color="${c}" onclick="selColor('${c}')"></div>`; });
+  document.getElementById('eGroup').value = m?.group ?? settingGroup;
   document.getElementById('eName').value  = m?.name ?? '';
   document.getElementById('eReps').value  = m?.reps ?? 10;
   document.getElementById('eSets').value  = m?.sets ?? 3;
@@ -1073,7 +1159,8 @@ async function saveMenuEditor() {
     name, icon: S.selectedEmoji, color: S.selectedColor,
     reps:  parseInt(document.getElementById('eReps').value)||10,
     sets:  parseInt(document.getElementById('eSets').value)||3,
-    xp:    parseInt(document.getElementById('eXp').value)||30
+    xp:    parseInt(document.getElementById('eXp').value)||30,
+    group: document.getElementById('eGroup').value || 'home',
   };
   if (S.editingMenuIdx>=0) S.menus[S.editingMenuIdx]=obj; else S.menus.push(obj);
   saveLocal(); renderSettings(); renderHome();
