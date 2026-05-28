@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.07</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.08</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -505,6 +505,11 @@ let S = {
     {id:3, name:'腕（ダンベルカール）3kg', icon:'🏋️', color:'#ffa94d', reps:20, sets:3, xp:1,  group:'home'},
     {id:4, name:'スクワット',              icon:'🦵', color:'#cc5de8', reps:10, sets:3, xp:2,  group:'home'},
     {id:5, name:'プランク（30秒）',        icon:'🧘', color:'#ff4d6d', reps:1,  sets:3, xp:30, group:'home'},
+    {id:6, name:'マシンA',                 icon:'🏋️', color:'#00e5a0', reps:10, sets:3, xp:3,  group:'gym'},
+    {id:7, name:'マシンB',                 icon:'⚡', color:'#4dabf7', reps:10, sets:3, xp:3,  group:'gym'},
+    {id:8, name:'マシンC',                 icon:'🔥', color:'#ffa94d', reps:10, sets:3, xp:3,  group:'gym'},
+    {id:9, name:'マシンD',                 icon:'💥', color:'#cc5de8', reps:10, sets:3, xp:3,  group:'gym'},
+    {id:10,name:'マシンE',                 icon:'⚔️', color:'#ffd43b', reps:10, sets:3, xp:3,  group:'gym'},
   ],
   activeGroup: 'home',
   records: {},         // { 'YYYY-MM-DD': [{menuId,reps,sets,note,xp}, ...] }
