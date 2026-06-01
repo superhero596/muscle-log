@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.10</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.11</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -395,6 +395,32 @@ input,select,textarea{font-size:16px !important}
   <div class="levelup-num" id="levelupNum">2</div>
   <div class="levelup-sub" id="levelupSub">新しいレベルに到達しました</div>
   <button class="levelup-btn" onclick="closeLevelUp()">やったぜ！</button>
+</div>
+
+<!-- 日付編集モーダル -->
+<div class="modal-bg" id="dayEditModal" onclick="closeModal('dayEditModal',event)">
+  <div class="modal-inner" style="max-height:80vh;overflow-y:auto">
+    <div class="modal-title" id="dayEditTitle">📅 記録を編集</div>
+    <div id="dayEditContent"></div>
+    <div style="margin-top:12px">
+      <button class="add-btn" id="dayEditAddBtn" onclick="openDayAddRecord()">＋ 種目を追加</button>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('dayEditModal')">閉じる</button>
+      <button class="btn-save" onclick="saveDayEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 日付別種目追加モーダル -->
+<div class="modal-bg" id="dayAddModal" onclick="closeModal('dayAddModal',event)">
+  <div class="modal-inner">
+    <div class="modal-title">種目を選択</div>
+    <div id="dayAddMenuList"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('dayAddModal')">キャンセル</button>
+    </div>
+  </div>
 </div>
 
 <!-- Timer Overlay -->
@@ -1003,7 +1029,7 @@ function renderCalendar() {
     const key = `${y}-${p2(m+1)}-${p2(d)}`;
     const has = !!(S.records[key]?.length);
     const isToday = key === td;
-    grid.innerHTML += `<div class="cal-day${has?' has-data':''}${isToday?' today':''}">${d}${has?'<span class="dot"></span>':''}</div>`;
+    grid.innerHTML += `<div class="cal-day${has?' has-data':''}${isToday?' today':''}" onclick="openDayEdit('${key}')" style="cursor:pointer">${d}${has?'<span class="dot"></span>':''}</div>`;
   }
   renderHistoryList();
 }
@@ -2777,6 +2803,131 @@ function deleteTimer(i) {
   timerState.timers.splice(i, 1);
   saveTimers();
   renderTimerTab();
+}
+
+// ── 過去記録編集 ──────────────────────────────────────────
+let editingDate = '';
+let editingRecords = [];
+
+function openDayEdit(dateKey) {
+  editingDate = dateKey;
+  // 既存の記録をディープコピー
+  editingRecords = JSON.parse(JSON.stringify(S.records[dateKey] || []));
+  document.getElementById('dayEditTitle').textContent = `📅 ${dateKey} の記録`;
+  renderDayEditContent();
+  document.getElementById('dayEditModal').classList.add('open');
+}
+
+function renderDayEditContent() {
+  const el = document.getElementById('dayEditContent');
+  if (!editingRecords.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">記録がありません。下の「＋種目を追加」から追加できます。</div>';
+    return;
+  }
+  el.innerHTML = editingRecords.map((r, i) => {
+    const m = S.menus.find(x => x.id == r.menuId);
+    if (!m) return '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:20px">${m.icon}</span>
+      <span style="flex:1;font-size:13px;color:var(--text)">${m.name}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+          <label style="font-size:9px;color:var(--text3)">回数</label>
+          <input type="number" value="${r.reps}" min="0" inputmode="numeric"
+            style="width:48px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;padding:4px;color:var(--text);font-size:14px;text-align:center"
+            onchange="updateEditRecord(${i},'reps',this.value)">
+        </div>
+        <span style="color:var(--text3)">×</span>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+          <label style="font-size:9px;color:var(--text3)">セット</label>
+          <input type="number" value="${r.sets}" min="0" inputmode="numeric"
+            style="width:48px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;padding:4px;color:var(--text);font-size:14px;text-align:center"
+            onchange="updateEditRecord(${i},'sets',this.value)">
+        </div>
+        <button onclick="removeEditRecord(${i})"
+          style="background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.3);border-radius:6px;padding:4px 8px;color:var(--red);font-size:12px;cursor:pointer;margin-left:4px">削除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateEditRecord(idx, field, val) {
+  const n = parseInt(val);
+  editingRecords[idx][field] = isNaN(n) ? 0 : n;
+}
+
+function removeEditRecord(idx) {
+  editingRecords.splice(idx, 1);
+  renderDayEditContent();
+}
+
+function openDayAddRecord() {
+  const list = document.getElementById('dayAddMenuList');
+  list.innerHTML = S.menus.map(m =>
+    `<div class="menu-edit-card" onclick="addDayRecord(${m.id})" style="cursor:pointer">
+      <div class="menu-edit-icon">${m.icon}</div>
+      <div class="menu-edit-info">
+        <div class="menu-edit-name" style="color:${m.color}">${m.name}</div>
+        <div class="menu-edit-detail">${m.reps}回×${m.sets}セット</div>
+      </div>
+    </div>`
+  ).join('');
+  document.getElementById('dayAddModal').classList.add('open');
+}
+
+function addDayRecord(menuId) {
+  const m = S.menus.find(x => x.id == menuId);
+  if (!m) return;
+  // 既に同じ種目があれば追加しない
+  if (editingRecords.find(r => r.menuId == menuId)) {
+    closeModal('dayAddModal');
+    return;
+  }
+  editingRecords.push({menuId: m.id, reps: m.reps, sets: m.sets, note: ''});
+  closeModal('dayAddModal');
+  renderDayEditContent();
+}
+
+async function saveDayEdit() {
+  // 0セットの記録は除外
+  const validRecs = editingRecords.filter(r => r.sets > 0 && r.reps > 0);
+
+  if (validRecs.length === 0) {
+    delete S.records[editingDate];
+  } else {
+    S.records[editingDate] = validRecs;
+  }
+
+  // 今日の記録なら todayDone も更新
+  if (editingDate === todayKey()) {
+    S.todayDone = {};
+    validRecs.forEach(r => { S.todayDone[r.menuId] = r; });
+  }
+
+  S.totalXp = calcTotalXp();
+  recalcLevel();
+  saveLocal();
+  updateHeader();
+  renderCalendar();
+  renderHome();
+  closeModal('dayEditModal');
+
+  // GASに同期
+  if (S.gasUrl) {
+    setSyncState('ing');
+    try {
+      // 削除された記録をGASからも消す
+      const oldRecs = S.records[editingDate] || [];
+      const oldIds = oldRecs.map(r => r.menuId);
+      // 全種目を保存（上書き）
+      for (const r of validRecs) {
+        const m = S.menus.find(x => x.id == r.menuId);
+        await gasPost({action:'saveRecord', date:editingDate, menuId:r.menuId, reps:r.reps, sets:r.sets, note:r.note||'', xp:m?m.xp:0});
+      }
+      await gasPost({action:'saveState', state:{totalXp:S.totalXp, level:S.level}});
+      setSyncState('ok');
+    } catch(e) { setSyncState('err'); }
+  }
 }
 
 // ── ServiceWorker登録 ────────────────────────────────────
