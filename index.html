@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.14</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.15</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -425,6 +425,15 @@ input,select,textarea{font-size:16px !important}
 <div class="modal-bg" id="quickEditModal" onclick="closeModal('quickEditModal',event)">
   <div class="modal-inner">
     <div class="modal-title" id="quickEditTitle">✏️ クイック編集</div>
+    <div class="field" style="margin-bottom:12px">
+      <label>種別</label>
+      <select id="quickType" onchange="updateQuickTypeFields()">
+        <option value="bodyweight">🏃 自重</option>
+        <option value="dumbbell">🏋️ 鉄アレイ（両手）</option>
+        <option value="machine">🤖 マシン</option>
+        <option value="timed">⏱️ 時間制</option>
+      </select>
+    </div>
     <div class="field-row" id="quickKgRow">
       <div class="field">
         <label id="quickKgLabel">重量（kg）</label>
@@ -2949,34 +2958,47 @@ function deleteTimer(i) {
 // ── クイック編集 ──────────────────────────────────────────
 let quickEditId = null;
 
+function updateQuickTypeFields() {
+  const type = document.getElementById('quickType').value;
+  const kgRow  = document.getElementById('quickKgRow');
+  const secRow = document.getElementById('quickSecondsRow');
+  const repsEl = document.getElementById('quickReps');
+  const kgLabel= document.getElementById('quickKgLabel');
+
+  if (type === 'timed') {
+    kgRow.style.display  = 'none';
+    secRow.style.display = 'block';
+    if (repsEl) repsEl.closest('.field').style.display = 'none';
+  } else if (type === 'machine' || type === 'dumbbell') {
+    kgRow.style.display  = 'grid';
+    secRow.style.display = 'none';
+    if (repsEl) repsEl.closest('.field').style.display = 'block';
+    kgLabel.textContent = type === 'dumbbell' ? '重量（片手kg）' : '重量（kg）';
+  } else {
+    kgRow.style.display  = 'none';
+    secRow.style.display = 'none';
+    if (repsEl) repsEl.closest('.field').style.display = 'block';
+  }
+}
+
 function openQuickEdit(id) {
   const m = S.menus.find(x => x.id === id);
   if (!m) return;
   quickEditId = id;
   document.getElementById('quickEditTitle').innerHTML = `${m.icon} ${m.name} を編集`;
 
-  const isTimed    = m.type === 'timed';
-  const isBodywt   = m.type === 'bodyweight' || !m.type;
-  const hasKg      = !isTimed && !isBodywt;
+  // 種別セレクトを設定
+  document.getElementById('quickType').value = m.type || 'bodyweight';
+  updateQuickTypeFields();
 
-  // kg行
-  document.getElementById('quickKgRow').style.display     = hasKg ? 'grid' : 'none';
-  // 秒数行
-  document.getElementById('quickSecondsRow').style.display = isTimed ? 'block' : 'none';
-  // 今日のセット数修正行（今日記録があれば表示）
+  // 今日のセット数修正行
   const todayRec = S.todayDone[id];
   document.getElementById('quickDoneSetsRow').style.display = todayRec ? 'block' : 'none';
 
-  if (hasKg) {
-    document.getElementById('quickKgLabel').textContent =
-      m.type === 'dumbbell' ? '重量（片手kg）' : '重量（kg）';
-    document.getElementById('quickKg').value = m.kg || '';
-  }
-  if (isTimed) {
-    document.getElementById('quickSeconds').value = m.seconds || 60;
-  }
-  document.getElementById('quickReps').value     = m.reps;
-  document.getElementById('quickSets').value     = m.sets;
+  document.getElementById('quickKg').value      = m.kg || '';
+  document.getElementById('quickSeconds').value = m.seconds || 60;
+  document.getElementById('quickReps').value    = m.reps;
+  document.getElementById('quickSets').value    = m.sets;
   document.getElementById('quickDoneSets').value = todayRec ? todayRec.sets : 0;
   document.getElementById('quickEditModal').classList.add('open');
 }
@@ -2985,13 +3007,14 @@ async function saveQuickEdit() {
   const m = S.menus.find(x => x.id === quickEditId);
   if (!m) return;
   const idx     = S.menus.indexOf(m);
+  const type    = document.getElementById('quickType').value;
   const kg      = parseFloat(document.getElementById('quickKg').value) || m.kg || 0;
   const seconds = parseInt(document.getElementById('quickSeconds').value) || m.seconds || 60;
   const reps    = parseInt(document.getElementById('quickReps').value) || m.reps;
   const sets    = parseInt(document.getElementById('quickSets').value) || m.sets;
 
   // メニュー設定を更新
-  S.menus[idx] = {...m, kg, reps, sets, seconds};
+  S.menus[idx] = {...m, type, kg, reps, sets, seconds};
 
   // 今日のセット数を修正
   const doneSetsEl = document.getElementById('quickDoneSetsRow');
