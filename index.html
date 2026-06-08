@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.19</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.20</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -3211,15 +3211,18 @@ loadTimers();
   if (changed) saveLocal();
 })();
 
-// 起動時に必ずXP・レベルをrecordsから再計算（localStorageの古い値を上書き）
-S.totalXp = calcTotalXp();
-recalcLevel();
+// 起動時はlocalStorageの値をそのまま使う（syncAllで上書きされる）
 updateHeader();
 renderHome();
 document.getElementById('gasUrl').value = S.gasUrl || '';
 if (S.gasUrl) {
   setSyncState('ing');
-  syncAll();
+  syncAll();  // syncAll内でStateシートの値を使う
+} else {
+  // GASなしの場合のみrecordsから計算
+  S.totalXp = calcTotalXp();
+  recalcLevel();
+  updateHeader();
 }
 </script>
 </body>
