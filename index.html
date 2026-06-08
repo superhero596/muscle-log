@@ -741,11 +741,9 @@ async function syncAll() {
         ]);
       }
     }
-    // XPはStateシートの値を優先（メニューのtype/kgがGASにない場合の対策）
-    const stateXp = data.state?.totalXp ?? 0;
-    const calcXp  = calcTotalXp();
-    // Stateが明らかに大きい場合はStateを使う（手動設定した正しい値）
-    S.totalXp = stateXp > calcXp ? stateXp : calcXp;
+    // XPはStateシートの値を直接使う
+    S.totalXp = Number(data.state?.totalXp ?? 0);
+    S.level   = Number(data.state?.level   ?? 1);
     recalcLevel();
     // 今日分をtodayDoneに反映
     const tk = todayKey();
