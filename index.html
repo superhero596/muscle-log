@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.21</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.22</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -654,11 +654,8 @@ function todayKey() {
 }
 function p2(n) { return String(n).padStart(2,'0'); }
 function xpForLevel(lv) {
-  // Lv40まで：レベル×1000、Lv40以降：45000/レベルの大器晩成型
   let t = 0;
-  for (let i = 1; i < lv; i++) {
-    t += i <= 40 ? i * 1000 : 45000;
-  }
+  for (let i = 1; i < lv; i++) t += i * 100;
   return t;
 }
 function calcMenuXp(mn, reps, sets) {
@@ -793,7 +790,7 @@ function hideLoading() {
 // ── ヘッダー更新 ──────────────────────────────────────────
 function updateHeader() {
   recalcLevel();  // 常にtotalXpから再計算
-  const xpNeeded  = S.level <= 40 ? S.level * 1000 : 45000;
+  const xpNeeded  = S.level * 100;
   const xpInLevel = S.totalXp - xpForLevel(S.level);
   const pct = Math.min(100, Math.round(xpInLevel / xpNeeded * 100));
   const t = getTitle(S.level);
