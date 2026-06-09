@@ -745,6 +745,7 @@ async function syncAll() {
     S.totalXp = Number(data.state?.totalXp ?? 0);
     S.level   = Number(data.state?.level   ?? 1);
     recalcLevel();
+    alert('DEBUG: totalXp=' + S.totalXp + ' level=' + S.level);
     // 今日分をtodayDoneに反映
     const tk = todayKey();
     S.todayDone = {};
