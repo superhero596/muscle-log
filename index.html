@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.22</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.24</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -663,12 +663,14 @@ function calcMenuXp(mn, reps, sets) {
   if (!mn || sets <= 0) return 0;
   const type = mn.type || 'bodyweight';
   const kg   = Number(mn.kg) || 0;
+  let xp = 0;
   switch(type) {
-    case 'machine':     return (kg / 10) * reps * sets;           // マシン
-    case 'dumbbell':    return (kg * 2 / 10) * reps * sets;       // 鉄アレイ（両手）
-    case 'timed':       return Math.floor((mn.seconds||30) / 15) * 25 * sets; // 時間制
-    default:            return mn.xp * reps * sets;               // 自重
+    case 'machine':  xp = (kg / 10) * reps * sets; break;
+    case 'dumbbell': xp = (kg * 2 / 10) * reps * sets; break;
+    case 'timed':    xp = Math.floor((mn.seconds||30) / 15) * 25 * sets; break;
+    default:         xp = mn.xp * reps * sets; break;
   }
+  return Math.round(xp); // 整数に丸める
 }
 
 function calcTotalXp() {
@@ -679,7 +681,7 @@ function calcTotalXp() {
     const sets = Number(r.sets) || 0;
     if (mn && sets > 0) total += calcMenuXp(mn, reps, sets);
   });
-  return total;
+  return Math.round(total);
 }
 
 function recalcLevel() {
@@ -796,7 +798,7 @@ function updateHeader() {
   const t = getTitle(S.level);
   document.getElementById('levelBadge').textContent = `Lv.${S.level}`;
   document.getElementById('xpBar').style.width = pct + '%';
-  document.getElementById('xpText').textContent = `${xpInLevel}/${xpNeeded} XP`;
+  document.getElementById('xpText').textContent = `${Math.round(xpInLevel)}/${xpNeeded} XP`;
   const titleEl = document.getElementById('titleBadge');
   if (titleEl) titleEl.textContent = `${t.icon} ${t.title}`;
 }
