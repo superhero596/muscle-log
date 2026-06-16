@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.24</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.25</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -763,11 +763,11 @@ async function syncAll() {
   }
 }
 
-async function pushRecord(date, menuId, reps, sets, note, xp) {
+async function pushRecord(date, menuId, reps, sets, note) {
   if (!S.gasUrl) return;
   try {
-    await gasPost({action:'saveRecord', date, menuId, reps, sets, note, xp});
-    await gasPost({action:'saveState',  state:{totalXp: S.totalXp, level: S.level}});
+    await gasPost({action:'saveRecord', date, menuId, reps, sets, note, xp:0});
+    await gasPost({action:'saveState',  state:{totalXp: Math.round(S.totalXp), level: S.level}});
     setSyncState('ok');
   } catch(e) { setSyncState('err'); }
 }
@@ -1011,7 +1011,7 @@ function quickTap(id) {
   showXpPopup(Math.round(calcMenuXp(m, curReps, 1)));
   if (S.level > wasLv) setTimeout(() => showLevelUp(S.level), 800);
   setSyncState('ing');
-  pushRecord(tk, id, m.reps, newSets, cur?.note||'', m.xp);
+  pushRecord(tk, id, curReps, newSets, cur?.note||'');
 }
 
 function openEdit(id) {
@@ -1065,7 +1065,7 @@ async function saveRecord() {
 
   // GASに非同期でプッシュ（xpフィールドなし）
   setSyncState('ing');
-  pushRecord(tk, id, reps, sets, note, m.xp);
+  pushRecord(tk, id, reps, sets, note);
 }
 
 // ── モーダル制御 ──────────────────────────────────────────
