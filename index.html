@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.25</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.26</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -912,7 +912,7 @@ function renderTodayProgress() {
       <span style="font-size:20px">${m.icon}</span>
       <span style="flex:1;font-size:13px">${m.name}</span>
       <span style="font-size:12px;color:var(--text2)">${r.reps}回×${r.sets}セット</span>
-      <span style="font-size:11px;color:var(--xp);font-family:'Rajdhani',sans-serif">+${m.xp}XP</span>
+      <span style="font-size:11px;color:var(--xp);font-family:'Rajdhani',sans-serif">+${Math.round(calcMenuXp(m, r.reps, r.sets))}XP</span>
       <button onclick="deleteToday(${id})" style="background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.3);border-radius:6px;padding:4px 8px;color:var(--red);font-size:12px;cursor:pointer;flex-shrink:0">削除</button>
     </div>`;
   }).join('');
