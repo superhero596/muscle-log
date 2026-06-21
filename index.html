@@ -229,7 +229,7 @@ input,select,textarea{font-size:16px !important}
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
-    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.26</span></div>
+    <div class="app-title">💪 MUSCLE LOG <span style="font-size:11px;color:var(--text3);font-weight:500;letter-spacing:1px">v1.27</span></div>
     <button class="sync-btn" onclick="syncAll()">
       <span class="sync-dot" id="syncDot"></span>同期
     </button>
@@ -1207,7 +1207,7 @@ function renderXpChart() {
     const k = `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
     return (S.records[k]||[]).reduce((a,r) => {
       const mn = S.menus.find(x=>x.id==r.menuId);
-      return a + (mn ? mn.xp * r.reps * r.sets : 0);
+      return a + (mn ? calcMenuXp(mn, r.reps, r.sets) : 0);
     }, 0);
   });
   const max = Math.max(...vals, 1);
